@@ -1,6 +1,7 @@
 # Implementation Status — Haraka
 
 Last updated: 2026-10-17  
+Last working git ref: a85bd149ad8d705b08fdf24c63ef91e6f528ec74  
 Environment: Node.js v24.21.0, npm 11.19.0, pnpm v9.15.9, PostgreSQL 16 + PostGIS ready, Redis 7 ready
 
 ---
