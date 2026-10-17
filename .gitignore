@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Prisma
+packages/database/src/generated/
+
+# Test outputs
+coverage/
+playwright-report/
+test-results/
+k6-results/
+
+# Logs
+*.log
+logs/
+pino-*.log
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Uploads
+uploads/

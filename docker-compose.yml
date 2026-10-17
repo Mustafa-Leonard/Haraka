@@ -1,0 +1,142 @@
+# ── Haraka Platform — Docker Compose ────────────────────────────────────────
+# Usage:
+#   docker compose up -d
+#   docker compose exec api pnpm db:migrate
+#   docker compose exec api pnpm db:seed
+
+version: '3.9'
+
+networks:
+  haraka:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    networks: [haraka]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: haraka
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: haraka
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haraka -d haraka"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Cache / Queue ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [haraka]
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── API ───────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    restart: unless-stopped
+    networks: [haraka]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://haraka:${POSTGRES_PASSWORD}@postgres:5432/haraka?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?required}
+      OTP_SECRET: ${OTP_SECRET:?required}
+      TOTP_ISSUER: Haraka
+      DARAJA_CONSUMER_KEY: ${DARAJA_CONSUMER_KEY:-sandbox}
+      DARAJA_CONSUMER_SECRET: ${DARAJA_CONSUMER_SECRET:-sandbox}
+      DARAJA_SHORTCODE: ${DARAJA_SHORTCODE:-174379}
+      DARAJA_PASSKEY: ${DARAJA_PASSKEY:-sandbox}
+      DARAJA_SANDBOX: ${DARAJA_SANDBOX:-true}
+      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-sandbox}
+      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-sandbox}
+      AFRICASTALKING_SENDER: ${AFRICASTALKING_SENDER:-Haraka}
+      SMS_SANDBOX: ${SMS_SANDBOX:-true}
+      OSRM_URL: ${OSRM_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      API_PORT: 3000
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Background Worker ─────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    restart: unless-stopped
+    networks: [haraka]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://haraka:${POSTGRES_PASSWORD}@postgres:5432/haraka?schema=public
+      REDIS_URL: redis://redis:6379
+      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-sandbox}
+      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-sandbox}
+      AFRICASTALKING_SENDER: ${AFRICASTALKING_SENDER:-Haraka}
+      SMS_SANDBOX: ${SMS_SANDBOX:-true}
+
+  # ── Web Frontend ──────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    restart: unless-stopped
+    networks: [haraka]
+    depends_on: [api]
+
+  # ── Reverse Proxy ─────────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    networks: [haraka]
+    depends_on: [api, web]
+    volumes:
+      - ./infrastructure/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_certs:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+
+volumes:
+  caddy_data:
+  caddy_certs:

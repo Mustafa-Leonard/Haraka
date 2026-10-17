@@ -1,0 +1,68 @@
+# Haraka — Caddy Reverse Proxy Configuration
+# Handles TLS, routing, and static file serving
+
+{
+    # Email for Let's Encrypt (set in environment)
+    email ops@{$DOMAIN}
+    # Remove for debug logging
+    log default
+}
+
+{$DOMAIN} {
+
+    # ── API & WebSocket ───────────────────────────────────────────────────────
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    # Socket.IO upgrade support
+    handle /socket.io/* {
+        reverse_proxy api:3000 {
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
+        }
+    }
+
+    # ── M-Pesa Callback (direct to API, no caching) ───────────────────────────
+    handle /daraja/* {
+        reverse_proxy api:3000
+    }
+
+    # ── Frontend SPA ──────────────────────────────────────────────────────────
+    handle {
+        reverse_proxy web:80
+    }
+
+    # ── Security Headers ──────────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+        -Server
+    }
+
+    # ── Compression ───────────────────────────────────────────────────────────
+    encode zstd gzip
+
+    # ── Logging ───────────────────────────────────────────────────────────────
+    log {
+        output file /var/log/caddy/haraka.log {
+            roll_size 100mb
+            roll_keep 10
+        }
+        format json
+    }
+}
+
+# Local development fallback (no TLS)
+:80 {
+    @api path /api/* /socket.io/* /daraja/*
+    handle @api {
+        reverse_proxy api:3000
+    }
+    handle {
+        reverse_proxy web:80
+    }
+}

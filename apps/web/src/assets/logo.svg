@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <g transform="translate(10, 5) rotate(-8, 22, 28)">
+    <rect x="2" y="2" width="40" height="44" rx="10" fill="#FF6A1F"/>
+    <text x="22" y="31" font-family="Sora, system-ui, sans-serif" font-weight="800" font-size="28" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">H</text>
+    <line x1="10" y1="22" x2="16" y2="22" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  </g>
+  <text x="70" y="36" font-family="Sora, system-ui, sans-serif" font-weight="700" font-size="26" fill="currentColor" letter-spacing="-0.5">haraka</text>
+</svg>

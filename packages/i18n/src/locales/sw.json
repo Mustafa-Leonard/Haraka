@@ -1,0 +1,91 @@
+{
+  "common": {
+    "appName": "Haraka",
+    "tagline": "Uwasilishaji wa haraka Pwani",
+    "search": "Tafuta",
+    "cancel": "Ghairi",
+    "confirm": "Thibitisha",
+    "save": "Hifadhi",
+    "submit": "Wasilisha",
+    "loading": "Inapakia...",
+    "error": "Hitilafu imetokea",
+    "retry": "Jaribu tena",
+    "language": "Lugha",
+    "theme": "Mwonekano",
+    "light": "Mwangaza",
+    "dark": "Giza",
+    "online": "Uko Hewani",
+    "offline": "Hauko Hewani"
+  },
+  "nav": {
+    "home": "Nyumbani",
+    "pricing": "Bei zetu",
+    "howItWorks": "Jinsi Inavyofanya Kazi",
+    "coverage": "Maeneo",
+    "login": "Ingia",
+    "register": "Jisajili",
+    "dashboard": "Dashibodi",
+    "activeJobs": "Mizigo Inayosafirishwa",
+    "history": "Historia",
+    "earnings": "Mapato",
+    "profile": "Wasifu",
+    "settings": "Mipangilio",
+    "logout": "Toka"
+  },
+  "roles": {
+    "merchant": "Mfanyabiashara",
+    "rider": "Dereva",
+    "dispatcher": "Mratibu",
+    "admin": "Msimamizi",
+    "recipient": "Mpokeaji"
+  },
+  "status": {
+    "REQUESTED": "Imeombwa",
+    "MATCHING": "Inatafuta Dereva",
+    "OFFERED": "Imepelekewa Dereva",
+    "ACCEPTED": "Imekubaliwa",
+    "ARRIVED_PICKUP": "Dereva Amefika Kuchukua",
+    "PICKED_UP": "Mzigo Umechukuliwa",
+    "IN_TRANSIT": "Njiani",
+    "ARRIVED_DROPOFF": "Dereva Amefika Mwisho",
+    "DELIVERED": "Imewasilishwa",
+    "COMPLETED": "Imekamilika",
+    "CANCELLED": "Imeghairiwa",
+    "FAILED": "Imeshindikana",
+    "DISPUTED": "Inabishaniwa"
+  },
+  "booking": {
+    "title": "Tuma Mzigo Mpya",
+    "pickup": "Mahali pa Kuchukulia",
+    "dropoff": "Mahali pa Kupeleka",
+    "recipientName": "Jina la Mpokeaji",
+    "recipientPhone": "Namba ya Simu ya Mpokeaji",
+    "vehicle": "Aina ya Usafiri",
+    "parcelSize": "Ukubwa wa Mzigo",
+    "notes": "Maagizo Maalum",
+    "paymentMethod": "Njia ya Malipo",
+    "quote": "Makadirio ya Bei",
+    "bookNow": "Thibitisha Uwasilishaji",
+    "pickupPinPrompt": "Mpatie dereva PIN hii akifika kuchukua mzigo:"
+  },
+  "rider": {
+    "goOnline": "Ingia Hewani",
+    "goOffline": "Toka Hewani",
+    "newOffer": "Ofa Mpya ya Mzigo!",
+    "secondsLeft": "Sekunde zilizobaki",
+    "accept": "Kubali Ofa",
+    "decline": "Kataa",
+    "enterPickupPin": "Weka PIN ya Kuchukulia",
+    "enterDeliveryPin": "Weka PIN ya Uwasilishaji",
+    "verifyAndComplete": "Kamilisha Uwasilishaji",
+    "sos": "Msaada wa Dharura (SOS)"
+  },
+  "tracking": {
+    "title": "Fuatilia Mzigo Wako",
+    "eta": "Muda Unaokadiriwa Kufika",
+    "riderInfo": "Maelezo ya Dereva",
+    "vehiclePlate": "Namba ya Usajili",
+    "deliveryPinAlert": "Mpatie dereva PIN yako ya siri pindi atakapowasili.",
+    "reportIssue": "Ripoti Tatizo"
+  }
+}

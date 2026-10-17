@@ -1,0 +1,91 @@
+{
+  "common": {
+    "appName": "Haraka",
+    "tagline": "Fast on-demand delivery for Coastal Kenya",
+    "search": "Search",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Try again",
+    "language": "Language",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "nav": {
+    "home": "Home",
+    "pricing": "Pricing",
+    "howItWorks": "How It Works",
+    "coverage": "Coverage Areas",
+    "login": "Login",
+    "register": "Register",
+    "dashboard": "Dashboard",
+    "activeJobs": "Active Deliveries",
+    "history": "History",
+    "earnings": "Earnings",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "roles": {
+    "merchant": "Merchant",
+    "rider": "Rider",
+    "dispatcher": "Dispatcher",
+    "admin": "Administrator",
+    "recipient": "Recipient"
+  },
+  "status": {
+    "REQUESTED": "Requested",
+    "MATCHING": "Finding Rider",
+    "OFFERED": "Offered to Rider",
+    "ACCEPTED": "Accepted",
+    "ARRIVED_PICKUP": "Arrived at Pickup",
+    "PICKED_UP": "Picked Up",
+    "IN_TRANSIT": "In Transit",
+    "ARRIVED_DROPOFF": "Arrived at Dropoff",
+    "DELIVERED": "Delivered",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled",
+    "FAILED": "Failed",
+    "DISPUTED": "Disputed"
+  },
+  "booking": {
+    "title": "Send a Parcel",
+    "pickup": "Pickup Location",
+    "dropoff": "Dropoff Location",
+    "recipientName": "Recipient Name",
+    "recipientPhone": "Recipient Phone",
+    "vehicle": "Vehicle Type",
+    "parcelSize": "Parcel Size",
+    "notes": "Delivery Instructions",
+    "paymentMethod": "Payment Method",
+    "quote": "Estimated Fare",
+    "bookNow": "Book Delivery",
+    "pickupPinPrompt": "Provide this PIN to rider upon arrival for collection:"
+  },
+  "rider": {
+    "goOnline": "Go Online",
+    "goOffline": "Go Offline",
+    "newOffer": "New Delivery Offer!",
+    "secondsLeft": "Seconds remaining",
+    "accept": "Accept Offer",
+    "decline": "Decline",
+    "enterPickupPin": "Enter Pickup PIN",
+    "enterDeliveryPin": "Enter Delivery PIN",
+    "verifyAndComplete": "Confirm Delivery",
+    "sos": "Emergency Alert (SOS)"
+  },
+  "tracking": {
+    "title": "Track Your Delivery",
+    "eta": "Estimated Arrival",
+    "riderInfo": "Rider Details",
+    "vehiclePlate": "Registration Plate",
+    "deliveryPinAlert": "Please provide your confidential delivery PIN to the rider once they arrive.",
+    "reportIssue": "Report a Problem"
+  }
+}

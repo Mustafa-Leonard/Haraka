@@ -1,0 +1,267 @@
+/* =============================================================================
+   HARAKA CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   Single source of truth for all visual properties across all interfaces.
+   Import this file ONCE at the application root.
+   ============================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+/* --- Light theme (default) --- */
+:root,
+[data-theme="light"] {
+  /* Brand */
+  --color-brand: #FF6A1F;
+  --color-brand-hover: #E55C10;
+  --color-brand-subtle: #FFF0E8;
+
+  /* Role colors */
+  --color-merchant: #2F6FE4;
+  --color-rider: #F5B301;
+  --color-admin: #2B3440;
+
+  /* Semantic */
+  --color-error: #D64545;
+  --color-error-subtle: #FEF0F0;
+  --color-warning: #F5B301;
+  --color-warning-subtle: #FFFAEB;
+  --color-info: #2F6FE4;
+  --color-info-subtle: #EEF4FF;
+
+  /* Surfaces */
+  --color-bg: #F4F2EF;
+  --color-card: #FFFFFF;
+  --color-ink: #1D232B;
+  --color-muted: #68717C;
+  --color-border: #E4E0DA;
+  --color-divider: #ECE9E3;
+  --color-overlay: rgba(29, 35, 43, 0.5);
+
+  /* Input */
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #E4E0DA;
+  --color-input-border-focus: #FF6A1F;
+  --color-input-placeholder: #9AA3AD;
+
+  /* Button */
+  --color-btn-primary-bg: #FF6A1F;
+  --color-btn-primary-text: #FFFFFF;
+  --color-btn-primary-hover: #E55C10;
+  --color-btn-secondary-bg: #FFFFFF;
+  --color-btn-secondary-text: #1D232B;
+  --color-btn-secondary-border: #E4E0DA;
+
+  /* Sidebar */
+  --color-sidebar-bg: #FFFFFF;
+  --color-sidebar-border: #E4E0DA;
+  --color-sidebar-item-active: #FFF0E8;
+  --color-sidebar-item-active-text: #FF6A1F;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+}
+
+/* --- Dark theme --- */
+[data-theme="dark"] {
+  --color-bg: #14181D;
+  --color-card: #1D232B;
+  --color-ink: #F1EFEC;
+  --color-muted: #9AA3AD;
+  --color-border: #2B333D;
+  --color-divider: #232B33;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-input-bg: #1D232B;
+  --color-input-border: #2B333D;
+  --color-input-placeholder: #68717C;
+
+  --color-btn-secondary-bg: #1D232B;
+  --color-btn-secondary-text: #F1EFEC;
+  --color-btn-secondary-border: #2B333D;
+
+  --color-sidebar-bg: #1D232B;
+  --color-sidebar-border: #2B333D;
+  --color-sidebar-item-active: rgba(255, 106, 31, 0.15);
+  --color-sidebar-item-active-text: #FF6A1F;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.35);
+}
+
+/* --- Typography --- */
+:root {
+  --font-heading: 'Sora', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Spacing scale (used as reference; prefer Tailwind classes in components) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Card defaults */
+  --card-radius: var(--radius-lg);
+  --card-border: 1px solid var(--color-border);
+  --card-padding: 1rem;
+
+  /* Min touch target (WCAG 2.5.5) */
+  --min-touch: 44px;
+
+  /* Transitions */
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 250ms ease;
+
+  /* Z-index scale */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}
+
+/* --- Reset and Base --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--color-brand);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Visible keyboard focus */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Remove default focus for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* --- Utility classes --- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Card base */
+.card {
+  background-color: var(--color-card);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Live dot animation */
+@keyframes pulse-ring {
+  0% { transform: scale(0.7); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 0.3; }
+  100% { transform: scale(0.7); opacity: 0.8; }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-brand);
+  animation: pulse-ring 2s ease infinite;
+}
+
+.live-dot--offline {
+  background-color: var(--color-muted);
+  animation: none;
+}

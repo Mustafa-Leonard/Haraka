@@ -1,0 +1,30 @@
+# ── Web (React PWA) ───────────────────────────────────────────────────────────
+FROM node:22-alpine AS base
+WORKDIR /app
+RUN npm install -g pnpm@9
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/api-client/package.json packages/api-client/
+COPY packages/theme/package.json packages/theme/
+COPY packages/i18n/package.json packages/i18n/
+COPY packages/config/package.json packages/config/
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS builder
+COPY packages/ packages/
+COPY apps/web/ apps/web/
+COPY tsconfig.base.json ./
+RUN pnpm --filter @haraka/shared-types build
+RUN pnpm --filter @haraka/api-client build
+RUN pnpm --filter @haraka/theme build
+RUN pnpm --filter @haraka/i18n build
+RUN pnpm --filter @haraka/config build
+RUN pnpm --filter web build
+
+# Serve with Caddy (web container only serves static files via Caddyfile)
+FROM caddy:2-alpine AS runner
+COPY --from=builder /app/apps/web/dist /srv
+EXPOSE 80

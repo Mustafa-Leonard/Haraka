@@ -1,0 +1,36 @@
+{
+  "name": "@haraka/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Haraka background worker \u2014 BullMQ job processor",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc --build",
+    "start": "node dist/main.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@haraka/database": "workspace:*",
+    "@haraka/shared-types": "workspace:*",
+    "@haraka/config": "workspace:*",
+    "bullmq": "^5.17.0",
+    "ioredis": "^5.4.1",
+    "@prisma/client": "^5.20.0",
+    "axios": "^1.7.7",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "zod": "^3.23.8",
+    "dayjs": "^1.11.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.7",
+    "@vitest/coverage-v8": "^2.1.2",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}

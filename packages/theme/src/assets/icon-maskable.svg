@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- PWA icon: maskable safe zone is inner 80% (410px circle) -->
+  <!-- Background fill (orange for maskable) -->
+  <rect width="512" height="512" fill="#FF6A1F"/>
+  <!-- Centered H mark (no tilt for maskable to keep within safe zone) -->
+  <text x="256" y="256" font-family="Sora, system-ui, sans-serif" font-weight="800" font-size="300" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">H</text>
+  <!-- Motion accent lines -->
+  <line x1="100" y1="210" x2="155" y2="210" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" opacity="0.5"/>
+  <line x1="75" y1="248" x2="130" y2="248" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" opacity="0.3"/>
+</svg>

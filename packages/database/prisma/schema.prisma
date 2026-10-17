@@ -1,0 +1,1564 @@
+// =============================================================================
+// HARAKA DATABASE SCHEMA
+// PostgreSQL 16 + PostGIS
+// All monetary values in integer minor units (1 KES = 100 minor units)
+// All timestamps in UTC; application layer converts to Africa/Nairobi for display
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/client"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis(version: "3.4"), pgcrypto, uuid_ossp(map: "uuid-ossp")]
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  MERCHANT
+  RIDER
+  DISPATCHER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum RiderOnlineStatus {
+  OFFLINE
+  ONLINE
+  ON_JOB
+  BREAK
+}
+
+enum VehicleType {
+  BODA
+  TUKTUK
+  MINIVAN
+}
+
+enum ParcelSize {
+  SMALL   // envelope, small box <2kg
+  MEDIUM  // 2-10kg
+  LARGE   // 10-30kg
+  EXTRA_LARGE // 30kg+
+}
+
+enum JobStatus {
+  REQUESTED
+  MATCHING
+  OFFERED
+  ACCEPTED
+  ARRIVED_PICKUP
+  PICKED_UP
+  IN_TRANSIT
+  ARRIVED_DROPOFF
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  FAILED
+  DISPUTED
+  EXPIRED
+}
+
+enum JobCancellationReason {
+  MERCHANT_CANCELLED
+  RIDER_CANCELLED
+  NO_RIDER_FOUND
+  SYSTEM_CANCELLED
+  ADMIN_CANCELLED
+  PAYMENT_FAILED
+  EXPIRED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  MPESA_STK
+  CASH_ON_DELIVERY
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  UNKNOWN
+  REQUIRES_ACTION
+}
+
+enum CODStatus {
+  PENDING_COLLECTION
+  COLLECTED_BY_RIDER
+  SETTLEMENT_PENDING
+  SETTLED
+  DISPUTED
+}
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum TransactionType {
+  PAYMENT_CAPTURE
+  PAYMENT_REFUND
+  COD_COLLECTION
+  COD_SETTLEMENT
+  RIDER_PAYOUT
+  PLATFORM_FEE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  ESCALATED
+  CLOSED
+}
+
+enum DisputeResolution {
+  MERCHANT_FAVOUR
+  RIDER_FAVOUR
+  PARTIAL_REFUND
+  FULL_REFUND
+  NO_ACTION
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  OTP_REQUEST
+  OTP_VERIFY
+  OTP_FAIL
+  SESSION_REVOKE
+  PASSWORD_CHANGE
+  MFA_ENROLL
+  MFA_VERIFY
+  MFA_DISABLE
+  ROLE_ASSIGN
+  ROLE_REVOKE
+  PERMISSION_GRANT
+  PERMISSION_REVOKE
+  RIDER_APPROVE
+  RIDER_SUSPEND
+  RIDER_REJECT
+  PRICING_CHANGE
+  ZONE_CHANGE
+  JOB_ASSIGN
+  JOB_CANCEL
+  PAYMENT_INITIATE
+  PAYMENT_CAPTURE
+  PAYMENT_REFUND
+  PAYOUT_CREATE
+  PAYOUT_APPROVE
+  EXPORT_DATA
+  PRIVACY_REQUEST
+  DATA_DELETE
+  ADMIN_ACTION
+  SECURITY_EVENT
+}
+
+enum ConsentPurpose {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+  MARKETING_SMS
+  MARKETING_EMAIL
+  LOCATION_TRACKING
+  DATA_SHARING
+}
+
+enum PrivacyRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  PORTABILITY
+  OBJECTION
+}
+
+enum PrivacyRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum DocumentType {
+  NATIONAL_ID
+  PASSPORT
+  DRIVING_LICENSE
+  VEHICLE_REGISTRATION
+  INSURANCE_CERTIFICATE
+  PROFILE_PHOTO
+}
+
+enum DistanceSource {
+  OSRM
+  OPENROUTESERVICE
+  HAVERSINE_ESTIMATE
+}
+
+enum OutboxEventType {
+  NOTIFICATION_OTP
+  NOTIFICATION_BOOKING_CONFIRMED
+  NOTIFICATION_RIDER_ASSIGNED
+  NOTIFICATION_RIDER_ARRIVING
+  NOTIFICATION_PICKUP_CONFIRMED
+  NOTIFICATION_DELIVERY_PIN
+  NOTIFICATION_DELIVERED
+  NOTIFICATION_PAYMENT_RECEIPT
+  NOTIFICATION_CANCELLED
+  NOTIFICATION_DISPUTE_UPDATE
+  NOTIFICATION_PAYOUT_STATUS
+  NOTIFICATION_SECURITY
+  JOB_DISPATCH_TRIGGER
+  JOB_OFFER_EXPIRE
+  PAYMENT_RECONCILE
+  SYSTEM_ALERT
+}
+
+enum SmsTemplateKey {
+  OTP_VERIFICATION
+  BOOKING_CONFIRMED
+  RIDER_ASSIGNED
+  RIDER_ARRIVING
+  PICKUP_CONFIRMED
+  DELIVERY_PIN
+  DELIVERED
+  PAYMENT_RECEIPT
+  CANCELLED
+  DISPUTE_UPDATE
+  PAYOUT_PROCESSED
+  SECURITY_ALERT
+}
+
+// =============================================================================
+// IDENTITY AND ACCESS
+// =============================================================================
+
+model User {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone             String    @unique // E.164 format: +254XXXXXXXXX
+  phoneVerified     Boolean   @default(false)
+  email             String?   @unique
+  emailVerified     Boolean   @default(false)
+  displayName       String?   @db.VarChar(100)
+  preferredLanguage String    @default("en") @db.VarChar(5)
+  timezone          String    @default("Africa/Nairobi") @db.VarChar(50)
+  avatarUrl         String?   @db.VarChar(500)
+  isActive          Boolean   @default(true)
+  isSuspended       Boolean   @default(false)
+  suspendedAt       DateTime?
+  suspendedReason   String?
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  roles                   UserRole[]
+  userRoles               UserRoleAssignment[]
+  sessions                Session[]
+  otpCodes                OtpCode[]
+  authAttempts            AuthenticationAttempt[]
+  totpConfig              TotpConfig?
+  merchant                Merchant?
+  rider                   Rider?
+  staffAssignments        StaffAssignment[]
+  auditLogs               AuditLog[]              @relation("AuditSubject")
+  actorAuditLogs          AuditLog[]              @relation("AuditActor")
+  consents                Consent[]
+  privacyRequests         PrivacyRequest[]
+  notifications           Notification[]
+
+  @@index([phone])
+  @@index([email])
+  @@index([isActive, isSuspended])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(50)
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles        UserRoleAssignment[]
+  rolePermissions  RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  description String?
+  resource    String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model UserRoleAssignment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  grantedBy String?  @db.Uuid
+  grantedAt DateTime @default(now())
+  expiresAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_role_assignments")
+}
+
+model RolePermission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  grantedBy    String?  @db.Uuid
+  grantedAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @db.Uuid
+  refreshTokenHash String  @unique // hashed refresh token
+  userAgent      String?   @db.VarChar(500)
+  ipAddress      String?   @db.VarChar(50)
+  deviceInfo     Json?
+  isActive       Boolean   @default(true)
+  lastActiveAt   DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokedReason  String?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isActive])
+  @@index([refreshTokenHash])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model OtpCode {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String?   @db.Uuid
+  phone         String    // E.164 format
+  codeHash      String    // bcrypt/argon2 hash of the OTP
+  purpose       String    @db.VarChar(50) // 'auth' | 'phone_verify' | 'password_reset'
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  ipAddress     String?   @db.VarChar(50)
+  createdAt     DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([phone, purpose, expiresAt])
+  @@index([userId])
+  @@map("otp_codes")
+}
+
+model AuthenticationAttempt {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?  @db.Uuid
+  phone       String?
+  ipAddress   String   @db.VarChar(50)
+  userAgent   String?  @db.VarChar(500)
+  action      String   @db.VarChar(50) // 'otp_request' | 'otp_verify' | 'refresh' | 'logout'
+  success     Boolean
+  failReason  String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([phone, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
+  @@map("authentication_attempts")
+}
+
+model TotpConfig {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @unique @db.Uuid
+  secretEncrypted String    // AES-256-GCM encrypted TOTP secret
+  keyId           String    @db.VarChar(20) // encryption key version
+  isEnabled       Boolean   @default(false)
+  enabledAt       DateTime?
+  lastUsedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id])
+  recoveryCodes TotpRecoveryCode[]
+
+  @@map("totp_configs")
+}
+
+model TotpRecoveryCode {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  totpConfigId String  @db.Uuid
+  codeHash   String    // argon2id hash
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  totpConfig TotpConfig @relation(fields: [totpConfigId], references: [id])
+
+  @@index([totpConfigId])
+  @@map("totp_recovery_codes")
+}
+
+// =============================================================================
+// MERCHANTS
+// =============================================================================
+
+model Merchant {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @db.Uuid
+  businessName    String   @db.VarChar(200)
+  businessType    String?  @db.VarChar(100) // 'shop' | 'restaurant' | 'pharmacy' | 'individual' etc.
+  description     String?
+  logoUrl         String?  @db.VarChar(500)
+  taxPin          String?  @db.VarChar(50) // KRA PIN (encrypted)
+  isVerified      Boolean  @default(false)
+  defaultZoneId   String?  @db.Uuid
+  walletId        String?  @unique @db.Uuid
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id])
+  addresses       Address[]
+  savedContacts   SavedContact[]
+  jobs            Job[]
+  merchantSettings MerchantSettings?
+  wallet          Wallet?           @relation(fields: [walletId], references: [id])
+
+  @@index([userId])
+  @@index([deletedAt])
+  @@map("merchants")
+}
+
+model MerchantSettings {
+  id                      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId              String  @unique @db.Uuid
+  defaultVehicleType      VehicleType @default(BODA)
+  defaultPaymentMethod    PaymentMethod @default(MPESA_STK)
+  notifyOnPickup          Boolean @default(true)
+  notifyOnDelivery        Boolean @default(true)
+  notifyRecipientBySms    Boolean @default(true)
+  requirePhotoProof       Boolean @default(false)
+  autoRebook              Boolean @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("merchant_settings")
+}
+
+model SavedContact {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId  String    @db.Uuid
+  name        String    @db.VarChar(100)
+  phone       String    @db.VarChar(20)
+  notes       String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@map("saved_contacts")
+}
+
+model Address {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId   String?   @db.Uuid
+  label        String?   @db.VarChar(100) // 'home' | 'office' | custom
+  street       String    @db.VarChar(300)
+  building     String?   @db.VarChar(200)
+  area         String    @db.VarChar(100)
+  town         String    @db.VarChar(100) // 'Kilifi' | 'Malindi' | 'Mombasa'
+  instructions String?   // delivery instructions
+  // PostGIS geography stored as raw SQL - accessed via $queryRaw
+  // lat/lng stored for convenience
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  isDefault    Boolean   @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  merchant      Merchant? @relation(fields: [merchantId], references: [id])
+  pickupJobs    Job[]     @relation("PickupAddress")
+  dropoffJobs   Job[]     @relation("DropoffAddress")
+
+  @@index([merchantId])
+  @@index([town])
+  @@map("addresses")
+}
+
+// =============================================================================
+// RIDERS
+// =============================================================================
+
+model Rider {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String             @unique @db.Uuid
+  nationalIdEncrypted  String?            // AES-256-GCM encrypted
+  keyId                String?            @db.VarChar(20)
+  verificationStatus   VerificationStatus @default(PENDING)
+  verifiedAt           DateTime?
+  verifiedBy           String?            @db.Uuid
+  onlineStatus         RiderOnlineStatus  @default(OFFLINE)
+  lastOnlineAt         DateTime?
+  lastOfflineAt        DateTime?
+  zoneId               String?            @db.Uuid
+  averageRating        Decimal?           @db.Decimal(3, 2)
+  ratingCount          Int                @default(0)
+  totalDeliveries      Int                @default(0)
+  walletId             String?            @unique @db.Uuid
+  deletedAt            DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user                User                     @relation(fields: [userId], references: [id])
+  documents           RiderDocument[]
+  verificationEvents  RiderVerificationEvent[]
+  vehicles            RiderVehicleAssignment[]
+  availability        RiderAvailability[]
+  locationState       RiderLocationState?
+  trackingPoints      TrackingPoint[]
+  jobOffers           JobOffer[]
+  jobs                Job[]                    @relation("AssignedRider")
+  ratings             Rating[]
+  wallet              Wallet?                  @relation(fields: [walletId], references: [id])
+  pushSubscriptions   PushSubscription[]
+
+  @@index([userId])
+  @@index([verificationStatus, onlineStatus])
+  @@index([deletedAt])
+  @@map("riders")
+}
+
+model RiderDocument {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId      String       @db.Uuid
+  documentType DocumentType
+  storagePath  String       @db.VarChar(500) // private storage path
+  mimeType     String       @db.VarChar(100)
+  sizeBytes    Int
+  notes        String?
+  isVerified   Boolean      @default(false)
+  verifiedAt   DateTime?
+  verifiedBy   String?      @db.Uuid
+  expiresAt    DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([riderId, documentType])
+  @@map("rider_documents")
+}
+
+model RiderVerificationEvent {
+  id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId   String             @db.Uuid
+  actorId   String?            @db.Uuid
+  fromStatus VerificationStatus
+  toStatus  VerificationStatus
+  reason    String?
+  notes     String?
+  createdAt DateTime           @default(now())
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([riderId])
+  @@map("rider_verification_events")
+}
+
+model Vehicle {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type         VehicleType
+  make         String?     @db.VarChar(100)
+  model        String?     @db.VarChar(100)
+  year         Int?
+  plateNumber  String      @unique @db.VarChar(20)
+  color        String?     @db.VarChar(50)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  riderAssignments RiderVehicleAssignment[]
+
+  @@index([plateNumber])
+  @@map("vehicles")
+}
+
+model RiderVehicleAssignment {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId    String    @db.Uuid
+  vehicleId  String    @db.Uuid
+  isPrimary  Boolean   @default(true)
+  assignedAt DateTime  @default(now())
+  removedAt  DateTime?
+
+  rider   Rider   @relation(fields: [riderId], references: [id])
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@unique([riderId, vehicleId])
+  @@index([riderId])
+  @@map("rider_vehicle_assignments")
+}
+
+model RiderAvailability {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId   String   @db.Uuid
+  dayOfWeek Int      // 0=Sunday ... 6=Saturday
+  startTime String   @db.VarChar(5) // "HH:MM"
+  endTime   String   @db.VarChar(5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@unique([riderId, dayOfWeek, startTime])
+  @@map("rider_availability")
+}
+
+model RiderLocationState {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId       String    @unique @db.Uuid
+  latitude      Decimal   @db.Decimal(10, 7)
+  longitude     Decimal   @db.Decimal(10, 7)
+  accuracy      Decimal?  @db.Decimal(8, 2) // meters
+  heading       Decimal?  @db.Decimal(5, 2) // degrees 0-360
+  speed         Decimal?  @db.Decimal(6, 2) // m/s
+  altitude      Decimal?  @db.Decimal(8, 2) // meters
+  recordedAt    DateTime  // device timestamp
+  receivedAt    DateTime  @default(now())
+  isStale       Boolean   @default(false)
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([riderId, receivedAt])
+  @@map("rider_location_state")
+}
+
+// =============================================================================
+// SERVICE ZONES AND PRICING
+// =============================================================================
+
+model ServiceZone {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(50) // 'kilifi' | 'malindi' | 'mombasa'
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pricingRules       PricingRule[]
+  zonePricingOverrides ZonePricingOverride[]
+  jobs               Job[]
+
+  @@map("service_zones")
+}
+
+model PricingRule {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  zoneId         String?     @db.Uuid // null = global default
+  vehicleType    VehicleType
+  baseFare       Int         // minor units
+  perKmRate      Int         // minor units per km
+  minimumFare    Int         // minor units
+  isActive       Boolean     @default(true)
+  effectiveFrom  DateTime    @default(now())
+  effectiveTo    DateTime?
+  version        Int         @default(1)
+  createdBy      String?     @db.Uuid
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  zone             ServiceZone?         @relation(fields: [zoneId], references: [id])
+  parcelMultipliers ParcelSizeMultiplier[]
+  routeQuotes      RouteQuote[]
+
+  @@index([zoneId, vehicleType, isActive])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("pricing_rules")
+}
+
+model ParcelSizeMultiplier {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pricingRuleId String     @db.Uuid
+  parcelSize    ParcelSize
+  multiplier    Decimal    @db.Decimal(4, 2) // e.g. 1.00, 1.50, 2.00
+
+  pricingRule PricingRule @relation(fields: [pricingRuleId], references: [id])
+
+  @@unique([pricingRuleId, parcelSize])
+  @@map("parcel_size_multipliers")
+}
+
+model ZonePricingOverride {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  zoneId      String   @db.Uuid
+  surcharge   Int      @default(0) // additional minor units
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  zone ServiceZone @relation(fields: [zoneId], references: [id])
+
+  @@index([zoneId])
+  @@map("zone_pricing_overrides")
+}
+
+model RouteQuote {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId       String         @db.Uuid
+  pricingRuleId    String         @db.Uuid
+  vehicleType      VehicleType
+  parcelSize       ParcelSize
+  pickupLat        Decimal        @db.Decimal(10, 7)
+  pickupLng        Decimal        @db.Decimal(10, 7)
+  dropoffLat       Decimal        @db.Decimal(10, 7)
+  dropoffLng       Decimal        @db.Decimal(10, 7)
+  distanceMeters   Int            // road or haversine distance
+  distanceSource   DistanceSource
+  baseFare         Int            // minor units
+  distanceFare     Int            // minor units
+  parcelMultiplier Decimal        @db.Decimal(4, 2)
+  surcharge        Int            @default(0)
+  totalAmount      Int            // minor units
+  currency         String         @default("KES") @db.VarChar(3)
+  breakdown        Json           // full calculation breakdown
+  expiresAt        DateTime
+  usedAt           DateTime?
+  createdAt        DateTime       @default(now())
+
+  pricingRule PricingRule @relation(fields: [pricingRuleId], references: [id])
+  jobs        Job[]
+
+  @@index([merchantId, expiresAt])
+  @@index([expiresAt])
+  @@map("route_quotes")
+}
+
+// =============================================================================
+// DELIVERY JOBS
+// =============================================================================
+
+model Job {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referenceCode         String                 @unique @db.VarChar(20) // e.g. "HRK-20241017-XXXX"
+  merchantId            String                 @db.Uuid
+  riderId               String?                @db.Uuid
+  zoneId                String?                @db.Uuid
+  quoteId               String?                @db.Uuid
+  pickupAddressId       String?                @db.Uuid
+  dropoffAddressId      String?                @db.Uuid
+
+  // Pickup details (snapshot at booking time)
+  pickupStreet          String                 @db.VarChar(300)
+  pickupBuilding        String?                @db.VarChar(200)
+  pickupArea            String                 @db.VarChar(100)
+  pickupTown            String                 @db.VarChar(100)
+  pickupInstructions    String?
+  pickupLat             Decimal                @db.Decimal(10, 7)
+  pickupLng             Decimal                @db.Decimal(10, 7)
+
+  // Dropoff details (snapshot at booking time)
+  dropoffStreet         String                 @db.VarChar(300)
+  dropoffBuilding       String?                @db.VarChar(200)
+  dropoffArea           String                 @db.VarChar(100)
+  dropoffTown           String                 @db.VarChar(100)
+  dropoffInstructions   String?
+  dropoffLat            Decimal                @db.Decimal(10, 7)
+  dropoffLng            Decimal                @db.Decimal(10, 7)
+
+  // Recipient details
+  recipientName         String                 @db.VarChar(100)
+  recipientPhone        String                 @db.VarChar(20)
+
+  // Parcel details
+  vehicleType           VehicleType
+  parcelSize            ParcelSize
+  parcelDescription     String?
+  isFragile             Boolean                @default(false)
+
+  // Pricing
+  quotedAmount          Int                    // minor units (locked at booking)
+  finalAmount           Int?                   // minor units (set at completion)
+  currency              String                 @default("KES") @db.VarChar(3)
+  paymentMethod         PaymentMethod
+  distanceMeters        Int
+  distanceSource        DistanceSource
+
+  // Status
+  status                JobStatus              @default(REQUESTED)
+  cancellationReason    JobCancellationReason?
+  cancellationNote      String?
+  cancelledBy           String?                @db.Uuid
+
+  // Scheduling
+  scheduledFor          DateTime?              // for future scheduling feature
+  isScheduled           Boolean                @default(false)
+  isRecurring           Boolean                @default(false)
+  recurringConfig       Json?
+
+  // Verification
+  pickupPinHash         String                 // argon2id hash of pickup PIN
+  deliveryPinHash       String                 // argon2id hash of delivery PIN
+  pickupVerifiedAt      DateTime?
+  deliveryVerifiedAt    DateTime?
+
+  // Tracking
+  publicTrackingToken   String?                @unique @db.VarChar(64)
+  trackingTokenExpiresAt DateTime?
+
+  // Timing
+  estimatedPickupAt     DateTime?
+  estimatedDeliveryAt   DateTime?
+  actualPickupAt        DateTime?
+  actualDeliveryAt      DateTime?
+
+  // Ratings
+  merchantRatingId      String?                @db.Uuid
+  offerAttemptCount     Int                    @default(0)
+
+  // Version for optimistic concurrency
+  version               Int                    @default(1)
+
+  deletedAt             DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  merchant        Merchant          @relation(fields: [merchantId], references: [id])
+  rider           Rider?            @relation("AssignedRider", fields: [riderId], references: [id])
+  zone            ServiceZone?      @relation(fields: [zoneId], references: [id])
+  quote           RouteQuote?       @relation(fields: [quoteId], references: [id])
+  pickupAddress   Address?          @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  dropoffAddress  Address?          @relation("DropoffAddress", fields: [dropoffAddressId], references: [id])
+  events          JobEvent[]
+  stateHistory    JobStateHistory[]
+  offers          JobOffer[]
+  trackingPoints  TrackingPoint[]
+  payments        Payment[]
+  verification    DeliveryVerification?
+  deliveryPhotos  DeliveryPhoto[]
+  disputes        Dispute[]
+  ratings         Rating[]
+  outboxEvents    OutboxEvent[]
+
+  @@index([merchantId, status])
+  @@index([riderId, status])
+  @@index([status, createdAt])
+  @@index([referenceCode])
+  @@index([publicTrackingToken])
+  @@index([zoneId, status])
+  @@index([scheduledFor])
+  @@map("jobs")
+}
+
+model JobEvent {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String    @db.Uuid
+  actorId     String?   @db.Uuid
+  actorRole   String?   @db.VarChar(50)
+  eventType   String    @db.VarChar(100) // matches AuditAction or custom job event
+  description String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@index([jobId, createdAt])
+  @@map("job_events")
+}
+
+model JobStateHistory {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String    @db.Uuid
+  actorId     String?   @db.Uuid
+  fromStatus  JobStatus
+  toStatus    JobStatus
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@index([jobId, createdAt])
+  @@map("job_state_history")
+}
+
+model JobOffer {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId         String      @db.Uuid
+  riderId       String      @db.Uuid
+  status        OfferStatus @default(PENDING)
+  distanceMeters Int?       // rider to pickup distance at offer time
+  offeredAt     DateTime    @default(now())
+  expiresAt     DateTime
+  respondedAt   DateTime?
+  declineReason String?
+  bullJobId     String?     // BullMQ job ID for expiry task
+
+  job   Job   @relation(fields: [jobId], references: [id])
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([jobId, status])
+  @@index([riderId, status])
+  @@index([expiresAt, status])
+  @@map("job_offers")
+}
+
+model TrackingPoint {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String   @db.Uuid
+  riderId     String   @db.Uuid
+  latitude    Decimal  @db.Decimal(10, 7)
+  longitude   Decimal  @db.Decimal(10, 7)
+  accuracy    Decimal? @db.Decimal(8, 2)
+  heading     Decimal? @db.Decimal(5, 2)
+  speed       Decimal? @db.Decimal(6, 2)
+  recordedAt  DateTime
+  receivedAt  DateTime @default(now())
+
+  job   Job   @relation(fields: [jobId], references: [id])
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([jobId, recordedAt])
+  @@index([riderId, recordedAt])
+  @@map("tracking_points")
+}
+
+model PublicTrackingToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token       String    @unique @db.VarChar(64)
+  jobId       String    @db.Uuid
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  accessCount Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([token, isActive])
+  @@index([jobId])
+  @@map("public_tracking_tokens")
+}
+
+model DeliveryVerification {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId                 String    @unique @db.Uuid
+  pickupAttempts        Int       @default(0)
+  pickupLockedUntil     DateTime?
+  deliveryAttempts      Int       @default(0)
+  deliveryLockedUntil   DateTime?
+  deliveryConfirmedAt   DateTime?
+  confirmedByRiderId    String?   @db.Uuid
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@map("delivery_verifications")
+}
+
+model DeliveryPhoto {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String   @db.Uuid
+  riderId     String   @db.Uuid
+  storagePath String   @db.VarChar(500)
+  mimeType    String   @db.VarChar(100)
+  sizeBytes   Int
+  photoType   String   @db.VarChar(50) // 'pickup' | 'delivery'
+  takenAt     DateTime
+  createdAt   DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@index([jobId])
+  @@map("delivery_photos")
+}
+
+// =============================================================================
+// PAYMENTS AND FINANCE
+// =============================================================================
+
+model Payment {
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId                 String        @db.Uuid
+  merchantId            String        @db.Uuid
+  method                PaymentMethod
+  status                PaymentStatus @default(PENDING)
+  amount                Int           // minor units
+  currency              String        @default("KES") @db.VarChar(3)
+  idempotencyKey        String?       @unique @db.VarChar(100)
+  providerRef           String?       @unique @db.VarChar(200) // M-Pesa MerchantRequestID or CheckoutRequestID
+  providerTxnRef        String?       @unique @db.VarChar(200) // M-Pesa MpesaReceiptNumber
+  phoneNumber           String?       @db.VarChar(20)
+  description           String?
+  failureReason         String?
+  processedAt           DateTime?
+  refundedAt            DateTime?
+  refundAmount          Int?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  job             Job                      @relation(fields: [jobId], references: [id])
+  providerEvents  PaymentProviderEvent[]
+  codRecord       CodRecord?
+  ledgerTxn       LedgerTransaction?
+  refunds         Refund[]
+
+  @@index([jobId])
+  @@index([merchantId, status])
+  @@index([status, createdAt])
+  @@index([providerRef])
+  @@map("payments")
+}
+
+model PaymentProviderEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId      String?   @db.Uuid
+  provider       String    @db.VarChar(50) // 'mpesa' | 'internal'
+  eventType      String    @db.VarChar(100)
+  providerRef    String?   @db.VarChar(200)
+  rawPayload     Json      // complete provider payload (mask sensitive fields)
+  processedAt    DateTime?
+  processingError String?
+  isDuplicate    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([providerRef])
+  @@index([createdAt])
+  @@map("payment_provider_events")
+}
+
+model CodRecord {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId           String    @unique @db.Uuid
+  jobId               String    @db.Uuid
+  riderId             String    @db.Uuid
+  amount              Int       // minor units
+  currency            String    @default("KES") @db.VarChar(3)
+  status              CODStatus @default(PENDING_COLLECTION)
+  collectedAt         DateTime?
+  collectionConfirmedBy String? @db.Uuid
+  settlementDue       DateTime?
+  settledAt           DateTime?
+  settledBy           String?   @db.Uuid
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([riderId, status])
+  @@index([status, settlementDue])
+  @@map("cod_records")
+}
+
+model Wallet {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId    String   @unique @db.Uuid // userId
+  ownerType  String   @db.VarChar(20) // 'merchant' | 'rider' | 'platform'
+  currency   String   @default("KES") @db.VarChar(3)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  merchants  Merchant[]
+  riders     Rider[]
+  ledgerAccount LedgerAccount?
+
+  @@index([ownerId])
+  @@map("wallets")
+}
+
+model LedgerAccount {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId    String?           @unique @db.Uuid
+  code        String            @unique @db.VarChar(50) // e.g. "PLATFORM_REVENUE", "RIDER:uuid"
+  name        String            @db.VarChar(100)
+  type        LedgerAccountType
+  currency    String            @default("KES") @db.VarChar(3)
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  wallet       Wallet?           @relation(fields: [walletId], references: [id])
+  debitEntries LedgerEntry[]     @relation("DebitAccount")
+  creditEntries LedgerEntry[]    @relation("CreditAccount")
+
+  @@index([code])
+  @@map("ledger_accounts")
+}
+
+model LedgerTransaction {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference       String          @unique @db.VarChar(100)
+  type            TransactionType
+  paymentId       String?         @unique @db.Uuid
+  payoutId        String?         @unique @db.Uuid
+  refundId        String?         @unique @db.Uuid
+  description     String
+  currency        String          @default("KES") @db.VarChar(3)
+  totalAmount     Int             // minor units (sum of debit entries)
+  actorId         String?         @db.Uuid
+  postedAt        DateTime        @default(now())
+  reversedAt      DateTime?
+  reversalTxnId   String?         @db.Uuid
+  metadata        Json?
+
+  payment Payment?       @relation(fields: [paymentId], references: [id])
+  entries LedgerEntry[]
+
+  @@index([reference])
+  @@index([paymentId])
+  @@index([postedAt])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId String   @db.Uuid
+  debitAccountId  String @db.Uuid
+  creditAccountId String @db.Uuid
+  amount        Int      // minor units (always positive)
+  currency      String   @default("KES") @db.VarChar(3)
+  description   String?
+  createdAt     DateTime @default(now())
+
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
+  debitAccount  LedgerAccount     @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccount LedgerAccount     @relation("CreditAccount", fields: [creditAccountId], references: [id])
+
+  @@index([transactionId])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
+  @@map("ledger_entries")
+}
+
+model Payout {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId       String       @db.Uuid
+  amount        Int          // minor units
+  currency      String       @default("KES") @db.VarChar(3)
+  status        PayoutStatus @default(PENDING)
+  method        String       @db.VarChar(50) // 'mpesa_b2c' | 'manual'
+  phone         String?      @db.VarChar(20)
+  providerRef   String?      @db.VarChar(200)
+  failureReason String?
+  approvedBy    String?      @db.Uuid
+  approvedAt    DateTime?
+  processedAt   DateTime?
+  period        String?      @db.VarChar(20) // e.g. "2024-10" for monthly payout period
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([riderId, status])
+  @@index([status, createdAt])
+  @@map("payouts")
+}
+
+model Refund {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId     String        @db.Uuid
+  amount        Int           // minor units
+  currency      String        @default("KES") @db.VarChar(3)
+  reason        String
+  status        PaymentStatus @default(PENDING)
+  providerRef   String?       @db.VarChar(200)
+  processedAt   DateTime?
+  approvedBy    String?       @db.Uuid
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+model ReconciliationRecord {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalJobs       Int
+  totalRevenue    Int      // minor units
+  totalPayouts    Int      // minor units
+  totalRefunds    Int      // minor units
+  discrepancies   Json?
+  resolvedAt      DateTime?
+  notes           String?
+  createdBy       String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  @@index([periodStart, periodEnd])
+  @@map("reconciliation_records")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key          String   @unique @db.VarChar(100)
+  operation    String   @db.VarChar(100)
+  requestHash  String   @db.VarChar(64) // SHA-256 of request body
+  responseCode Int
+  response     Json
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+model OutboxEvent {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType   OutboxEventType
+  jobId       String?        @db.Uuid
+  payload     Json
+  attempts    Int            @default(0)
+  maxAttempts Int            @default(5)
+  processedAt DateTime?
+  nextRetryAt DateTime?
+  failedAt    DateTime?
+  errorMessage String?
+  createdAt   DateTime       @default(now())
+
+  job Job? @relation(fields: [jobId], references: [id])
+
+  @@index([processedAt, failedAt, nextRetryAt])
+  @@index([eventType, createdAt])
+  @@map("outbox_events")
+}
+
+model DeadLetterEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outboxEventId String?  @db.Uuid
+  eventType     String   @db.VarChar(100)
+  payload       Json
+  failureReason String
+  attempts      Int
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+  resolvedBy    String?  @db.Uuid
+
+  @@index([eventType, createdAt])
+  @@index([resolvedAt])
+  @@map("dead_letter_events")
+}
+
+model Notification {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?             @db.Uuid
+  channel     NotificationChannel
+  templateKey SmsTemplateKey?
+  recipient   String              @db.VarChar(200) // phone, email, or push endpoint
+  subject     String?
+  body        String
+  language    String              @default("en") @db.VarChar(5)
+  status      NotificationStatus  @default(PENDING)
+  providerRef String?             @db.VarChar(200)
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  failureCode String?
+  retryCount  Int                 @default(0)
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user     User?                 @relation(fields: [userId], references: [id])
+  attempts NotificationAttempt[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([channel, status])
+  @@map("notifications")
+}
+
+model NotificationAttempt {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String    @db.Uuid
+  providerRef    String?   @db.VarChar(200)
+  success        Boolean
+  responseCode   String?   @db.VarChar(20)
+  responseBody   String?
+  attemptedAt    DateTime  @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  @@index([notificationId])
+  @@map("notification_attempts")
+}
+
+model SmsTemplate {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         SmsTemplateKey
+  language    String         @db.VarChar(5) // 'en' | 'sw'
+  body        String         // template with {{variable}} placeholders
+  version     Int            @default(1)
+  isActive    Boolean        @default(true)
+  createdBy   String?        @db.Uuid
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([key, language, version])
+  @@index([key, language, isActive])
+  @@map("sms_templates")
+}
+
+model PushSubscription {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId     String   @db.Uuid
+  endpoint    String   @db.VarChar(1000)
+  p256dh      String   @db.VarChar(500)
+  auth        String   @db.VarChar(200)
+  userAgent   String?  @db.VarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@unique([riderId, endpoint])
+  @@index([riderId, isActive])
+  @@map("push_subscriptions")
+}
+
+// =============================================================================
+// GOVERNANCE: DISPUTES, RATINGS, AUDIT
+// =============================================================================
+
+model Dispute {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId        String           @db.Uuid
+  reportedBy   String           @db.Uuid
+  reporterRole String           @db.VarChar(20) // 'merchant' | 'rider' | 'recipient'
+  status       DisputeStatus    @default(OPEN)
+  category     String           @db.VarChar(50) // 'missing_item' | 'late_delivery' | 'damaged' etc
+  description  String
+  resolution   DisputeResolution?
+  resolvedBy   String?          @db.Uuid
+  resolvedAt   DateTime?
+  resolutionNote String?
+  refundAmount Int?             // minor units
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@index([jobId])
+  @@index([status, createdAt])
+  @@map("disputes")
+}
+
+model Rating {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String   @db.Uuid
+  riderId     String   @db.Uuid
+  ratedBy     String   @db.Uuid // merchantId or public recipient identifier
+  raterRole   String   @db.VarChar(20) // 'merchant' | 'recipient'
+  score       Int      // 1-5
+  comment     String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  job   Job   @relation(fields: [jobId], references: [id])
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@unique([jobId, raterRole])
+  @@index([riderId, createdAt])
+  @@map("ratings")
+}
+
+model AuditLog {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId     String?     @db.Uuid
+  actorRole   String?     @db.VarChar(50)
+  subjectId   String?     @db.Uuid
+  subjectType String?     @db.VarChar(50)
+  action      AuditAction
+  resource    String      @db.VarChar(100)
+  resourceId  String?     @db.VarChar(100)
+  oldValue    Json?       // redacted sensitive fields
+  newValue    Json?
+  ipAddress   String?     @db.VarChar(50)
+  userAgent   String?     @db.VarChar(500)
+  requestId   String?     @db.VarChar(50)
+  outcome     String      @db.VarChar(20) // 'success' | 'failure' | 'partial'
+  failReason  String?
+  createdAt   DateTime    @default(now())
+
+  actor   User? @relation("AuditActor", fields: [actorId], references: [id])
+  subject User? @relation("AuditSubject", fields: [subjectId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([subjectId, subjectType])
+  @@index([action, createdAt])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Consent {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String         @db.Uuid
+  purpose     ConsentPurpose
+  version     String         @db.VarChar(20) // policy version e.g. "1.0"
+  granted     Boolean
+  grantedAt   DateTime?
+  revokedAt   DateTime?
+  ipAddress   String?        @db.VarChar(50)
+  createdAt   DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, purpose, version])
+  @@index([userId, purpose])
+  @@map("consents")
+}
+
+model PrivacyRequest {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String               @db.Uuid
+  type         PrivacyRequestType
+  status       PrivacyRequestStatus @default(PENDING)
+  description  String?
+  handledBy    String?              @db.Uuid
+  handledAt    DateTime?
+  completedAt  DateTime?
+  rejectedAt   DateTime?
+  rejectReason String?
+  exportPath   String?              // temporary signed URL for data export
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("privacy_requests")
+}
+
+model StaffAssignment {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @db.Uuid
+  zoneId      String?   @db.Uuid
+  title       String?   @db.VarChar(100)
+  assignedBy  String?   @db.Uuid
+  assignedAt  DateTime  @default(now())
+  removedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("staff_assignments")
+}
+
+model Setting {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String   @unique @db.VarChar(100)
+  value       String
+  description String?
+  isPublic    Boolean  @default(false) // whether to expose in public /settings endpoint
+  updatedBy   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
