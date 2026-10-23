@@ -13,6 +13,10 @@ export const registerVehicleSchema = z.object({
   color: z.string().max(50).optional(),
 });
 
+export const riderVerificationRejectionSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 export const offerResponseSchema = z.object({
   declineReason: z.string().max(300).optional(),
 });

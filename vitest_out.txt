@@ -1,0 +1,106 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/agnes/Desktop/My Works/Pwani Ride/backend[39m
+
+ [32m✓[39m tests/jwt-auth.guard.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 21[2mms[22m[39m
+ [32m✓[39m tests/totp.service.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 290[2mms[22m[39m
+ [31m❯[39m tests/auth.service.spec.ts [2m([22m[2m10 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[33m 2263[2mms[22m[39m
+   [33m[2m✓[22m[39m AuthService password authentication[2m > [22mnormalizes phone identifiers and issues a session for verified customer accounts [33m441[2mms[22m[39m
+[31m   [31m×[31m AuthService password authentication[2m > [22mrejects password sign-in until the phone has been verified[90m 250[2mms[22m[31m[39m
+[31m     → promise resolved "{ accessToken: 'access-token', …(4) }" instead of rejecting[39m
+[31m   [31m×[31m AuthService password authentication[2m > [22mdoes not create accounts when an unknown phone requests OTP[90m 4[2mms[22m[31m[39m
+[31m     → service.requestOtp is not a function[39m
+[31m   [31m×[31m AuthService password authentication[2m > [22mblocks staff accounts from customer password sign-in[90m 258[2mms[22m[31m[39m
+[31m     → promise resolved "{ mfaRequired: true, …(2) }" instead of rejecting[39m
+[31m   [31m×[31m AuthService password authentication[2m > [22mrequires TOTP after staff SMS OTP and does not create a session yet[90m 2[2mms[22m[31m[39m
+[31m     → service.verifyOtp is not a function[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 4 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/auth.service.spec.ts[2m > [22mAuthService password authentication[2m > [22mrejects password sign-in until the phone has been verified
+[31m[1mAssertionError[22m: promise resolved "{ accessToken: 'access-token', …(4) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [Error: rejected promise][39m
+[31m+ Object {[39m
+[31m+   "accessToken": "access-token",[39m
+[31m+   "mfaRequired": false,[39m
+[31m+   "refreshToken": "refresh-token",[39m
+[31m+   "sessionId": "session-id",[39m
+[31m+   "user": Object {[39m
+[31m+     "displayName": "Merchant",[39m
+[31m+     "id": "user-id",[39m
+[31m+     "isActive": true,[39m
+[31m+     "isSuspended": false,[39m
+[31m+     "phone": "+254712345678",[39m
+[31m+     "preferredLanguage": "en",[39m
+[31m+     "roles": Array [[39m
+[31m+       "MERCHANT",[39m
+[31m+     ],[39m
+[31m+   },[39m
+[31m+ }[39m
+
+[36m [2m❯[22m tests/auth.service.spec.ts:[2m119:5[22m[39m
+    [90m117| [39m    [35mawait[39m [34mexpect[39m(
+    [90m118| [39m      service[33m.[39m[34mloginWithPassword[39m([32m'+254712345678'[39m[33m,[39m password[33m,[39m [32m'127.0.0.1'[39m…
+    [90m119| [39m    )[33m.[39mrejects[33m.[39m[34mtoBeInstanceOf[39m([33mUnauthorizedException[39m)[33m;[39m
+    [90m   | [39m    [31m^[39m
+    [90m120| [39m    [34mexpect[39m(session[33m.[39mcreateSession)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m121| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/auth.service.spec.ts[2m > [22mAuthService password authentication[2m > [22mdoes not create accounts when an unknown phone requests OTP
+[31m[1mTypeError[22m: service.requestOtp is not a function[39m
+[36m [2m❯[22m tests/auth.service.spec.ts:[2m149:19[22m[39m
+    [90m147| [39m    })[33m;[39m
+    [90m148| [39m
+    [90m149| [39m    [35mawait[39m service[33m.[39m[34mrequestOtp[39m([32m'+254712345678'[39m[33m,[39m [32m'password_reset'[39m[33m,[39m [32m'127.0[39m…
+    [90m   | [39m                  [31m^[39m
+    [90m150| [39m
+    [90m151| [39m    [34mexpect[39m(prisma[33m.[39muser[33m.[39mcreate)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/auth.service.spec.ts[2m > [22mAuthService password authentication[2m > [22mblocks staff accounts from customer password sign-in
+[31m[1mAssertionError[22m: promise resolved "{ mfaRequired: true, …(2) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [Error: rejected promise][39m
+[31m+ Object {[39m
+[31m+   "challengeToken": "SAedzrnbZrUcnlO0lgQmfFWq19hbQbllZMx8zGBMJXM",[39m
+[31m+   "mfaRequired": true,[39m
+[31m+   "setupRequired": false,[39m
+[31m+ }[39m
+
+[36m [2m❯[22m tests/auth.service.spec.ts:[2m159:5[22m[39m
+    [90m157| [39m    [35mawait[39m [34mexpect[39m(
+    [90m158| [39m      service[33m.[39m[34mloginWithPassword[39m([32m'+254712345678'[39m[33m,[39m password[33m,[39m [32m'127.0.0.1'[39m…
+    [90m159| [39m    )[33m.[39mrejects[33m.[39m[34mtoBeInstanceOf[39m([33mUnauthorizedException[39m)[33m;[39m
+    [90m   | [39m    [31m^[39m
+    [90m160| [39m    [34mexpect[39m(session[33m.[39mcreateSession)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m161| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/auth.service.spec.ts[2m > [22mAuthService password authentication[2m > [22mrequires TOTP after staff SMS OTP and does not create a session yet
+[31m[1mTypeError[22m: service.verifyOtp is not a function[39m
+[36m [2m❯[22m tests/auth.service.spec.ts:[2m198:34[22m[39m
+    [90m196| [39m    )[33m;[39m
+    [90m197| [39m
+    [90m198| [39m    [35mconst[39m result [33m=[39m [35mawait[39m service[33m.[39m[34mverifyOtp[39m(
+    [90m   | [39m                                 [31m^[39m
+    [90m199| [39m      [32m'+254712345678'[39m[33m,[39m
+    [90m200| [39m      password[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m10 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 03:42:01
+[2m   Duration [22m 5.90s[2m (transform 1.31s, setup 0ms, collect 5.13s, tests 2.57s, environment 2ms, prepare 2.43s)[22m
+

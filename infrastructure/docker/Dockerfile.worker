@@ -11,6 +11,8 @@ COPY packages/validation/package.json packages/validation/
 COPY packages/config/package.json packages/config/
 COPY packages/i18n/package.json packages/i18n/
 COPY apps/worker/package.json apps/worker/
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
@@ -18,9 +20,11 @@ COPY packages/ packages/
 COPY apps/worker/ apps/worker/
 COPY tsconfig.base.json ./
 RUN pnpm --filter @haraka/database generate
+RUN pnpm --filter @haraka/database build
 RUN pnpm --filter @haraka/shared-types build
 RUN pnpm --filter @haraka/validation build
-RUN pnpm --filter worker build
+RUN pnpm --filter @haraka/config build
+RUN pnpm --filter @haraka/worker build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

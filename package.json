@@ -9,7 +9,11 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "build:backend": "pnpm --filter @haraka/api build",
+    "build:frontend": "pnpm --filter @haraka/web build",
     "dev": "pnpm -r --parallel dev",
+    "dev:backend": "pnpm --filter @haraka/api dev",
+    "dev:frontend": "pnpm --filter @haraka/web dev",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yaml,yml}\" --ignore-path .gitignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yaml,yml}\" --ignore-path .gitignore",

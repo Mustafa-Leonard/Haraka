@@ -8,6 +8,7 @@ export interface PricingRuleDto {
   baseFare: number; // minor units
   perKmRate: number; // minor units
   minimumFare: number; // minor units
+  riderShareBps: number | null;
   parcelMultipliers: ParcelMultiplierDto[];
   isActive: boolean;
   effectiveFrom: string;
@@ -32,6 +33,7 @@ export interface UpdatePricingRuleDto {
   baseFare?: number;
   perKmRate?: number;
   minimumFare?: number;
+  riderShareBps?: number;
   parcelMultipliers?: ParcelMultiplierDto[];
   notes?: string;
 }

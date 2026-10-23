@@ -107,11 +107,12 @@ export interface QuoteRequestDto {
   dropoffLng: number;
   vehicleType: VehicleType;
   parcelSize: ParcelSize;
-  zoneSlug?: string;
+  zoneSlug: string;
 }
 
 export interface QuoteResponseDto {
   quoteId: string;
+  zoneName: string;
   vehicleType: VehicleType;
   parcelSize: ParcelSize;
   distanceMeters: number;

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <g transform="translate(4, 4) rotate(-8, 20, 20)">
+    <rect x="0" y="0" width="40" height="40" rx="10" fill="#FF6A1F"/>
+    <text x="20" y="20" font-family="Sora, system-ui, sans-serif" font-weight="800" font-size="26" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">H</text>
+    <line x1="8" y1="14" x2="14" y2="14" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  </g>
+</svg>

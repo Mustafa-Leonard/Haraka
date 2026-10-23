@@ -1,10 +1,21 @@
+import './load-env';
 import { PrismaClient } from '../generated/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding Haraka development database...');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Development seed data cannot be applied in production.');
+  }
+
+  const demoPassword = process.env.HARAKA_DEMO_PASSWORD;
+  if (!demoPassword || demoPassword.length < 16) {
+    throw new Error('Set HARAKA_DEMO_PASSWORD to a value of at least 16 characters before seeding.');
+  }
+  const demoPasswordHash = await argon2.hash(demoPassword, { type: argon2.argon2id });
+
+  console.log('Seeding Haraka development database...');
 
   // 1. Roles & Permissions
   const adminRole = await prisma.role.upsert({
@@ -88,8 +99,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       vehicleType: 'BODA',
-      baseFare: 10000,    // KES 100.00
-      perKmRate: 4000,    // KES 40.00 / km
+      baseFare: 10000, // KES 100.00
+      perKmRate: 4000, // KES 40.00 / km
       minimumFare: 10000, // KES 100.00
       version: 1,
       notes: 'Standard coastal Boda pricing',
@@ -102,8 +113,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000002',
       vehicleType: 'TUKTUK',
-      baseFare: 20000,    // KES 200.00
-      perKmRate: 6000,    // KES 60.00 / km
+      baseFare: 20000, // KES 200.00
+      perKmRate: 6000, // KES 60.00 / km
       minimumFare: 20000, // KES 200.00
       version: 1,
       notes: 'Standard coastal Tuk-Tuk pricing',
@@ -151,10 +162,11 @@ async function main() {
   // 4. Demo Merchant: Mama Fatuma General Store (Kilifi)
   const merchantUser = await prisma.user.upsert({
     where: { phone: '+254711000001' },
-    update: {},
+    update: { passwordHash: demoPasswordHash },
     create: {
       phone: '+254711000001',
       phoneVerified: true,
+      passwordHash: demoPasswordHash,
       email: 'fatuma@kilifistore.co.ke',
       displayName: 'Mama Fatuma',
       preferredLanguage: 'sw',
@@ -194,10 +206,11 @@ async function main() {
   // 5. Demo Rider: Juma Kazungu (Boda Boda Rider, Approved & Online)
   const riderUser = await prisma.user.upsert({
     where: { phone: '+254722000002' },
-    update: {},
+    update: { passwordHash: demoPasswordHash },
     create: {
       phone: '+254722000002',
       phoneVerified: true,
+      passwordHash: demoPasswordHash,
       displayName: 'Juma Kazungu',
       preferredLanguage: 'sw',
       roles: ['RIDER'],
@@ -250,14 +263,14 @@ async function main() {
   await prisma.riderLocationState.upsert({
     where: { riderId: riderProfile.id },
     update: {
-      latitude: -3.6310,
+      latitude: -3.631,
       longitude: 39.8505,
       isStale: false,
       recordedAt: new Date(),
     },
     create: {
       riderId: riderProfile.id,
-      latitude: -3.6310,
+      latitude: -3.631,
       longitude: 39.8505,
       accuracy: 5.0,
       heading: 90.0,
@@ -269,10 +282,11 @@ async function main() {
   // 6. Demo Admin: Haraka Operations Lead
   const adminUser = await prisma.user.upsert({
     where: { phone: '+254700000000' },
-    update: {},
+    update: { passwordHash: demoPasswordHash },
     create: {
       phone: '+254700000000',
       phoneVerified: true,
+      passwordHash: demoPasswordHash,
       email: 'ops@haraka.co.ke',
       displayName: 'Haraka Dispatch Lead',
       roles: ['ADMIN', 'DISPATCHER'],
@@ -299,12 +313,12 @@ async function main() {
     });
   }
 
-  console.log('✅ Seeding completed successfully!');
+  console.log('Seeding completed successfully.');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error during database seeding:', e);
+    console.error('Error during database seeding:', e);
     process.exit(1);
   })
   .finally(async () => {

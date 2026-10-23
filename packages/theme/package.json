@@ -2,19 +2,25 @@
   "name": "@haraka/theme",
   "version": "0.1.0",
   "private": true,
-  "description": "Haraka design system \u2014 tokens, CSS variables, and brand assets",
-  "type": "module",
+  "description": "Haraka design system — tokens, CSS variables, and brand assets",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./styles": "./src/styles/index.css",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": {
+      "types": "./dist/tokens.d.ts",
+      "require": "./dist/tokens.js",
+      "default": "./dist/tokens.js"
+    }
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "build": "tsc --build",
+    "build": "tsc",
     "clean": "rimraf dist"
   },
   "devDependencies": {

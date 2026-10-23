@@ -1,22 +1,23 @@
 # Haraka — System Architecture & Module Boundaries
 
 ## 1. High-Level Architecture
+
 Haraka is architected as a modular monolith deployed via Docker containers or Node.js runtime, organized in a pnpm monorepo.
 
 ```mermaid
 flowchart TD
     ClientWeb["Web Client (React 18 + Vite PWA)"] --> |HTTP / REST| API["Haraka API (NestJS + Fastify)"]
     ClientWeb --> |WebSocket| SocketServer["Socket.IO Gateway (Live Tracking)"]
-    
+
     API --> |Prisma ORM + PostGIS| Postgres[("PostgreSQL 16 + PostGIS")]
     API --> |PubSub / Cache / Rate Limiting| Redis[("Redis 7")]
     API --> |Events / Queues| BullMQ["BullMQ Job Queues"]
-    
+
     SocketServer --> |Redis Adapter| Redis
     BullMQ --> Worker["Haraka Background Worker"]
     Worker --> Postgres
     Worker --> Redis
-    
+
     API & Worker --> |Daraja M-Pesa STK & B2C| Safaricom["Safaricom M-Pesa Gateway"]
     API & Worker --> |SMS Gateway| AT["Africa's Talking SMS"]
     API --> |Routing Engine| OSRM["OSRM / Haversine Engine"]
@@ -57,4 +58,4 @@ haraka/
    - `rider:{id}`: Incoming job offers and dispatch events.
    - `public-tracking:{token}`: Sanitized rider GPS coordinates and ETA updates.
    - `dispatchers`: Real-time fleet overview.
-3. **Asynchronous Background Processing**: Transactional Outbox pattern writes to `outbox_events` within the primary database transaction. The BullMQ worker ingests outbox events and executes SMS dispatch, retry backoff with jitter, dead-letter routing, and payment reconciliations.
+3. **Asynchronous Background Processing (target architecture)**: The accepted design is to write `outbox_events` within the primary database transaction and have workers dispatch SMS with retries and dead-letter handling. This flow is not complete: business services currently send SMS synchronously, no producer is connected to the notification BullMQ queue, and payment reconciliation handlers are not implemented. See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md).

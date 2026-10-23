@@ -12,7 +12,11 @@ export const quoteRequestSchema = z.object({
   dropoffLng: z.number().min(-180).max(180),
   vehicleType: vehicleTypeSchema,
   parcelSize: parcelSizeSchema,
-  zoneSlug: z.string().optional(),
+  zoneSlug: z
+    .string()
+    .min(2)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/),
 });
 
 export const addressSnapshotSchema = z.object({

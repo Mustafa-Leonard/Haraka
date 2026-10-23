@@ -4,7 +4,7 @@ import { kenyaPhoneSchema } from './phone';
 export const initiateMpesaSchema = z.object({
   jobId: z.string().uuid(),
   phoneNumber: kenyaPhoneSchema,
-  idempotencyKey: z.string().max(100).optional(),
+  idempotencyKey: z.string().min(1).max(100),
 });
 
 export const codCollectionSchema = z.object({

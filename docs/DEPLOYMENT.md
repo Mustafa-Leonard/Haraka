@@ -1,46 +1,42 @@
-# Haraka — Production Deployment Guide
+# Haraka Deployment Guide
 
-## 1. Production Architecture Overview
-Haraka uses containerized deployments orchestrated via Docker Compose or Kubernetes, reverse-proxied by Caddy (automatic Let's Encrypt TLS).
+## Deployment status
 
-```mermaid
-flowchart LR
-    Internet((Internet)) --> |HTTPS 443| Caddy["Caddy Reverse Proxy"]
-    Caddy --> |/api & /socket.io| API["haraka-api (NestJS)"]
-    Caddy --> |/*| Web["haraka-web (Nginx/SPA)"]
-    API --> Postgres[("PostgreSQL 16 + PostGIS")]
-    API --> Redis[("Redis 7")]
-    Worker["haraka-worker"] --> Postgres
-    Worker --> Redis
-```
+Production deployment is not approved yet. See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for unresolved payment, payout, notification, MFA, and verification blockers. The local Docker engine and PostgreSQL/Redis containers are available; Compose image builds and deployment behavior have not been verified.
 
----
+## Compose layout
 
-## 2. Docker Compose Deployment
+The repository currently has a single `docker-compose.yml` defining PostgreSQL/PostGIS, Redis, the API, the web SPA, the notification worker, and Caddy. It does not have a `docker-compose.prod.yml`.
 
-```bash
-# 1. Clone repository on production host
-git clone https://github.com/haraka-logistics/haraka.git /opt/haraka
-cd /opt/haraka
+Before a production deployment:
 
-# 2. Configure production environment
-cp .env.example .env
-nano .env  # set secure passwords, secrets, and API keys
+1. Use a Docker-capable host and a reviewed release ref.
+2. Create a protected `.env` from `.env.example`. Set unique production values for database credentials, JWT/cookie secrets, the 64-character hexadecimal field-encryption key, CORS origins, domain, and live provider credentials. Configure `RESEND_API_KEY`, `EMAIL_FROM` on a verified sending domain, and HTTPS `WEB_APP_URL` for email verification and password recovery.
+3. Require `MPESA_ENV=production` and `AT_ENV=production` for live payments and SMS. Sandbox mode is not live service.
+4. Validate configuration and build images:
 
-# 3. Build and launch containers
-docker compose -f docker-compose.prod.yml up -d --build
+   ```sh
+   docker compose config
+   docker compose build
+   ```
 
-# 4. Run database migrations
-docker compose -f docker-compose.prod.yml exec api pnpm db:migrate:deploy
+5. Start the services and apply database migrations:
 
-# 5. Check health status
-curl -f http://localhost:3000/health
-```
+   ```sh
+   docker compose up -d
+   docker compose exec api ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
+   ```
 
----
+6. Verify readiness through the configured domain:
 
-## 3. Rollback Procedure
-If a deployment fails:
-1. Revert container image tags in `docker-compose.prod.yml` to the previous release.
-2. Execute `docker compose up -d` to switch traffic.
-3. Apply compensating database migrations if non-breaking; do not automatically run destructive rollback commands on live production databases.
+   ```sh
+   curl -f "https://${DOMAIN}/api/v1/health/ready"
+   ```
+
+Do not seed production with development fixture accounts. The current notification worker has no producer, and payout disbursement is not implemented; deploying these services does not make those flows operational.
+
+## Rollback
+
+1. Switch to the previously approved immutable image/release ref.
+2. Re-deploy the previous application images without automatically rolling back database migrations.
+3. Apply only reviewed, forward-compatible corrective migrations. Do not run destructive rollback commands against production data.

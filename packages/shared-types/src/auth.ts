@@ -10,6 +10,44 @@ export interface AuthUser {
   isSuspended: boolean;
 }
 
+export type CustomerPortalRole = 'MERCHANT' | 'RIDER';
+
+export const STAFF_PORTAL_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'DISPATCHER',
+  'SUPPORT',
+  'FINANCE',
+  'VERIFICATION_OFFICER',
+] as const;
+
+export type StaffPortalRole = (typeof STAFF_PORTAL_ROLES)[number];
+export type LoginRole = CustomerPortalRole | StaffPortalRole;
+
+export const ADMIN_WORKSPACE_ACCESS: Record<string, StaffPortalRole[]> = {
+  '/admin': ['ADMIN', 'SUPER_ADMIN'],
+  '/admin/fleet': ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER'],
+  '/admin/jobs': ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'SUPPORT'],
+  '/admin/riders': ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_OFFICER'],
+  '/admin/pricing': ['ADMIN', 'SUPER_ADMIN'],
+  '/admin/ledger': ['ADMIN', 'SUPER_ADMIN', 'FINANCE'],
+  '/admin/disputes': ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'SUPPORT'],
+  '/admin/audit': ['ADMIN', 'SUPER_ADMIN'],
+};
+
+export function isStaffPortalRole(role: string): role is StaffPortalRole {
+  return STAFF_PORTAL_ROLES.includes(role as StaffPortalRole);
+}
+
+export function getStaffHomePath(roles: string[]): string {
+  if (roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) return '/admin';
+  if (roles.includes('DISPATCHER')) return '/admin/fleet';
+  if (roles.includes('SUPPORT')) return '/admin/jobs';
+  if (roles.includes('FINANCE')) return '/admin/ledger';
+  if (roles.includes('VERIFICATION_OFFICER')) return '/admin/riders';
+  return '/login';
+}
+
 export interface JwtPayload {
   sub: string; // userId
   phone: string;
@@ -19,22 +57,24 @@ export interface JwtPayload {
   exp?: number;
 }
 
-export interface OtpRequestDto {
-  phone: string;
-  purpose?: 'auth' | 'phone_verify';
-}
-
-export interface OtpVerifyDto {
-  phone: string;
-  code: string;
-  purpose?: 'auth' | 'phone_verify';
-}
-
 export interface AuthTokensDto {
   accessToken: string;
   expiresIn: number; // seconds
   tokenType: 'Bearer';
 }
+
+export interface StaffMfaChallengeDto {
+  mfaRequired: true;
+  challengeToken: string;
+  setupRequired: boolean;
+}
+
+export interface AuthSessionDto extends AuthTokensDto {
+  mfaRequired: false;
+  user: AuthUser;
+}
+
+export type PasswordLoginResultDto = AuthSessionDto | StaffMfaChallengeDto;
 
 export interface SessionDto {
   id: string;

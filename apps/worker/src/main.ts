@@ -1,75 +1,97 @@
-import { Worker, Queue } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { Worker, type Job } from 'bullmq';
 import axios from 'axios';
 import pino from 'pino';
+import { z } from 'zod';
 
-const logger = pino({ level: 'info' });
-const prisma = new PrismaClient();
+const logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
+const notificationJobSchema = z.object({
+  to: z.string().min(1),
+  message: z.string().min(1),
+  channel: z.literal('SMS'),
+});
+type NotificationJob = z.infer<typeof notificationJobSchema>;
 
-const redisConnection = {
-  host: process.env['REDIS_HOST'] || 'localhost',
-  port: parseInt(process.env['REDIS_PORT'] || '6379', 10),
-  password: process.env['REDIS_PASSWORD'] || undefined,
-};
+function redisConnection() {
+  const url = new URL(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+  const db = Number(url.pathname.slice(1) || 0);
 
-async function startWorker() {
-  logger.info('🚀 Haraka BullMQ Background Worker starting...');
-
-  // Outbox notification worker
-  try {
-    const notificationWorker = new Worker(
-      'notifications-queue',
-      async (job) => {
-        logger.info(`Processing notification job: ${job.name} (ID: ${job.id})`);
-        const { to, message, channel } = job.data;
-
-        // Perform SMS delivery via Africa's Talking / sandbox
-        logger.info(`[Worker SMS] Sending to ${to}: ${message}`);
-        return { delivered: true, timestamp: new Date() };
-      },
-      { connection: redisConnection, concurrency: 5 },
-    );
-
-    notificationWorker.on('completed', (job) => {
-      logger.info(`Notification job ${job.id} completed successfully`);
-    });
-
-    notificationWorker.on('failed', (job, err) => {
-      logger.error(`Notification job ${job?.id} failed: ${err.message}`);
-    });
-  } catch (err: any) {
-    logger.warn(`Redis connection warning for worker queues: ${err.message}. Running in local poller mode.`);
-  }
-
-  // Periodic polling fallback for pending outbox events
-  setInterval(async () => {
-    try {
-      const pendingEvents = await prisma.outboxEvent.findMany({
-        where: {
-          processedAt: null,
-          attempts: { lt: 5 },
-        },
-        take: 10,
-      });
-
-      for (const event of pendingEvents) {
-        logger.info(`Processing OutboxEvent ${event.id} of type ${event.eventType}`);
-        await prisma.outboxEvent.update({
-          where: { id: event.id },
-          data: {
-            attempts: { increment: 1 },
-            processedAt: new Date(),
-          },
-        });
-      }
-    } catch {
-      // In dev without DB
-    }
-  }, 10000);
-
-  logger.info('✅ Haraka Worker initialized and listening for jobs');
+  return {
+    host: url.hostname,
+    port: Number(url.port || (url.protocol === 'rediss:' ? 6380 : 6379)),
+    username: url.username || undefined,
+    password: url.password || undefined,
+    db,
+    ...(url.protocol === 'rediss:' ? { tls: {} } : {}),
+  };
 }
 
-startWorker().catch((err) => {
-  logger.error('Worker failed to start:', err);
+async function sendSms(to: string, message: string) {
+  if (process.env['AT_ENV'] === 'sandbox') {
+    logger.info('SMS sandbox job processed.');
+    return { isSandbox: true };
+  }
+
+  const apiKey = process.env['AT_API_KEY'];
+  const username = process.env['AT_USERNAME'];
+  if (process.env['AT_ENV'] !== 'production' || !apiKey || !username) {
+    throw new Error('Live SMS integration is not fully configured.');
+  }
+
+  const params = new URLSearchParams({
+    username,
+    to,
+    message,
+  });
+  if (process.env['AT_SENDER_ID']) {
+    params.set('from', process.env['AT_SENDER_ID']);
+  }
+
+  let response;
+  try {
+    response = await axios.post(
+      'https://api.africastalking.com/version1/messaging',
+      params.toString(),
+      {
+        headers: {
+          apiKey,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        timeout: 10_000,
+      },
+    );
+  } catch {
+    throw new Error('SMS provider request failed.');
+  }
+
+  const recipient = response.data?.SMSMessageData?.Recipients?.[0];
+  if (recipient?.status !== 'Success') {
+    throw new Error('SMS provider did not confirm delivery.');
+  }
+  return { isSandbox: false, messageId: recipient.messageId };
+}
+
+async function processNotification(job: Job<NotificationJob>) {
+  const parsed = notificationJobSchema.safeParse(job.data);
+  if (!parsed.success) {
+    throw new Error('Invalid SMS notification job payload.');
+  }
+  return sendSms(parsed.data.to, parsed.data.message);
+}
+
+const worker = new Worker('notifications-queue', processNotification, {
+  connection: redisConnection(),
+  concurrency: Number(process.env['WORKER_CONCURRENCY'] ?? 5),
 });
+
+worker.on('ready', () => logger.info('Notification worker is ready.'));
+worker.on('failed', () => logger.error('Notification job failed.'));
+worker.on('error', () => logger.error('Notification worker encountered an error.'));
+
+const shutdown = async () => {
+  await worker.close();
+  logger.info('Notification worker stopped.');
+};
+
+process.once('SIGINT', () => void shutdown());
+process.once('SIGTERM', () => void shutdown());

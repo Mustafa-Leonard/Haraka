@@ -36,16 +36,16 @@ export interface RiderLocationDto {
 
 export interface RiderEarningsDto {
   period: string;
-  totalEarned: number; // minor units
-  totalJobs: number;
+  availableBalance: number; // minor units
+  completedJobsThisWeek: number;
   currency: string;
-  breakdown: EarningBreakdownDto[];
+  ledgerActivity: RiderLedgerActivityDto[];
 }
 
-export interface EarningBreakdownDto {
+export interface RiderLedgerActivityDto {
   date: string;
-  jobs: number;
-  earned: number; // minor units
+  completedJobs: number;
+  netChange: number; // minor units
 }
 
 export interface RiderAvailabilityToggleDto {

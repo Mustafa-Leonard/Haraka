@@ -25,8 +25,16 @@ enum UserRole {
   MERCHANT
   RIDER
   DISPATCHER
+  SUPPORT
+  FINANCE
+  VERIFICATION_OFFICER
   ADMIN
   SUPER_ADMIN
+}
+
+enum AuthActionPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum VerificationStatus {
@@ -51,9 +59,9 @@ enum VehicleType {
 }
 
 enum ParcelSize {
-  SMALL   // envelope, small box <2kg
-  MEDIUM  // 2-10kg
-  LARGE   // 10-30kg
+  SMALL // envelope, small box <2kg
+  MEDIUM // 2-10kg
+  LARGE // 10-30kg
   EXTRA_LARGE // 30kg+
 }
 
@@ -130,6 +138,7 @@ enum TransactionType {
   PAYMENT_REFUND
   COD_COLLECTION
   COD_SETTLEMENT
+  RIDER_EARNING
   RIDER_PAYOUT
   PLATFORM_FEE
   ADJUSTMENT
@@ -296,6 +305,7 @@ model User {
   phoneVerified     Boolean   @default(false)
   email             String?   @unique
   emailVerified     Boolean   @default(false)
+  passwordHash      String?   @db.VarChar(255)
   displayName       String?   @db.VarChar(100)
   preferredLanguage String    @default("en") @db.VarChar(5)
   timezone          String    @default("Africa/Nairobi") @db.VarChar(50)
@@ -310,26 +320,42 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  roles                   UserRole[]
-  userRoles               UserRoleAssignment[]
-  sessions                Session[]
-  otpCodes                OtpCode[]
-  authAttempts            AuthenticationAttempt[]
-  totpConfig              TotpConfig?
-  merchant                Merchant?
-  rider                   Rider?
-  staffAssignments        StaffAssignment[]
-  auditLogs               AuditLog[]              @relation("AuditSubject")
-  actorAuditLogs          AuditLog[]              @relation("AuditActor")
-  consents                Consent[]
-  privacyRequests         PrivacyRequest[]
-  notifications           Notification[]
+  roles            UserRole[]
+  userRoles        UserRoleAssignment[]
+  sessions         Session[]
+  otpCodes         OtpCode[]
+  authActionTokens AuthActionToken[]
+  authAttempts     AuthenticationAttempt[]
+  totpConfig       TotpConfig?
+  merchant         Merchant?
+  rider            Rider?
+  staffAssignments StaffAssignment[]
+  auditLogs        AuditLog[]              @relation("AuditSubject")
+  actorAuditLogs   AuditLog[]              @relation("AuditActor")
+  consents         Consent[]
+  privacyRequests  PrivacyRequest[]
+  notifications    Notification[]
 
   @@index([phone])
   @@index([email])
   @@index([isActive, isSuspended])
   @@index([deletedAt])
   @@map("users")
+}
+
+model AuthActionToken {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String            @db.Uuid
+  purpose   AuthActionPurpose
+  tokenHash String            @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+  @@map("auth_action_tokens")
 }
 
 model Role {
@@ -340,8 +366,8 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  userRoles        UserRoleAssignment[]
-  rolePermissions  RolePermission[]
+  userRoles       UserRoleAssignment[]
+  rolePermissions RolePermission[]
 
   @@map("roles")
 }
@@ -361,11 +387,11 @@ model Permission {
 }
 
 model UserRoleAssignment {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @db.Uuid
-  roleId    String   @db.Uuid
-  grantedBy String?  @db.Uuid
-  grantedAt DateTime @default(now())
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @db.Uuid
+  roleId    String    @db.Uuid
+  grantedBy String?   @db.Uuid
+  grantedAt DateTime  @default(now())
   expiresAt DateTime?
 
   user User @relation(fields: [userId], references: [id])
@@ -392,18 +418,18 @@ model RolePermission {
 }
 
 model Session {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId         String    @db.Uuid
-  refreshTokenHash String  @unique // hashed refresh token
-  userAgent      String?   @db.VarChar(500)
-  ipAddress      String?   @db.VarChar(50)
-  deviceInfo     Json?
-  isActive       Boolean   @default(true)
-  lastActiveAt   DateTime  @default(now())
-  expiresAt      DateTime
-  revokedAt      DateTime?
-  revokedReason  String?
-  createdAt      DateTime  @default(now())
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String    @unique // hashed refresh token
+  userAgent        String?   @db.VarChar(500)
+  ipAddress        String?   @db.VarChar(50)
+  deviceInfo       Json?
+  isActive         Boolean   @default(true)
+  lastActiveAt     DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+  createdAt        DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -414,17 +440,17 @@ model Session {
 }
 
 model OtpCode {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId        String?   @db.Uuid
-  phone         String    // E.164 format
-  codeHash      String    // bcrypt/argon2 hash of the OTP
-  purpose       String    @db.VarChar(50) // 'auth' | 'phone_verify' | 'password_reset'
-  attempts      Int       @default(0)
-  maxAttempts   Int       @default(5)
-  expiresAt     DateTime
-  usedAt        DateTime?
-  ipAddress     String?   @db.VarChar(50)
-  createdAt     DateTime  @default(now())
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?   @db.Uuid
+  phone       String // E.164 format
+  codeHash    String // bcrypt/argon2 hash of the OTP
+  purpose     String    @db.VarChar(50) // 'auth' | 'phone_verify' | 'password_reset'
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  ipAddress   String?   @db.VarChar(50)
+  createdAt   DateTime  @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -434,15 +460,15 @@ model OtpCode {
 }
 
 model AuthenticationAttempt {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String?  @db.Uuid
-  phone       String?
-  ipAddress   String   @db.VarChar(50)
-  userAgent   String?  @db.VarChar(500)
-  action      String   @db.VarChar(50) // 'otp_request' | 'otp_verify' | 'refresh' | 'logout'
-  success     Boolean
-  failReason  String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @db.Uuid
+  phone      String?
+  ipAddress  String   @db.VarChar(50)
+  userAgent  String?  @db.VarChar(500)
+  action     String   @db.VarChar(50) // Includes staff_mfa_challenge for one-use MFA challenges
+  success    Boolean
+  failReason String?
+  createdAt  DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -455,7 +481,7 @@ model AuthenticationAttempt {
 model TotpConfig {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId          String    @unique @db.Uuid
-  secretEncrypted String    // AES-256-GCM encrypted TOTP secret
+  secretEncrypted String // AES-256-GCM encrypted TOTP secret
   keyId           String    @db.VarChar(20) // encryption key version
   isEnabled       Boolean   @default(false)
   enabledAt       DateTime?
@@ -463,18 +489,18 @@ model TotpConfig {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id])
+  user          User               @relation(fields: [userId], references: [id])
   recoveryCodes TotpRecoveryCode[]
 
   @@map("totp_configs")
 }
 
 model TotpRecoveryCode {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  totpConfigId String  @db.Uuid
-  codeHash   String    // argon2id hash
-  usedAt     DateTime?
-  createdAt  DateTime  @default(now())
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  totpConfigId String    @db.Uuid
+  codeHash     String // argon2id hash
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
 
   totpConfig TotpConfig @relation(fields: [totpConfigId], references: [id])
 
@@ -487,26 +513,26 @@ model TotpRecoveryCode {
 // =============================================================================
 
 model Merchant {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId          String   @unique @db.Uuid
-  businessName    String   @db.VarChar(200)
-  businessType    String?  @db.VarChar(100) // 'shop' | 'restaurant' | 'pharmacy' | 'individual' etc.
-  description     String?
-  logoUrl         String?  @db.VarChar(500)
-  taxPin          String?  @db.VarChar(50) // KRA PIN (encrypted)
-  isVerified      Boolean  @default(false)
-  defaultZoneId   String?  @db.Uuid
-  walletId        String?  @unique @db.Uuid
-  deletedAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @unique @db.Uuid
+  businessName  String    @db.VarChar(200)
+  businessType  String?   @db.VarChar(100) // 'shop' | 'restaurant' | 'pharmacy' | 'individual' etc.
+  description   String?
+  logoUrl       String?   @db.VarChar(500)
+  taxPin        String?   @db.VarChar(50) // KRA PIN (encrypted)
+  isVerified    Boolean   @default(false)
+  defaultZoneId String?   @db.Uuid
+  walletId      String?   @unique @db.Uuid
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  user            User              @relation(fields: [userId], references: [id])
-  addresses       Address[]
-  savedContacts   SavedContact[]
-  jobs            Job[]
+  user             User              @relation(fields: [userId], references: [id])
+  addresses        Address[]
+  savedContacts    SavedContact[]
+  jobs             Job[]
   merchantSettings MerchantSettings?
-  wallet          Wallet?           @relation(fields: [walletId], references: [id])
+  wallet           Wallet?           @relation(fields: [walletId], references: [id])
 
   @@index([userId])
   @@index([deletedAt])
@@ -514,17 +540,17 @@ model Merchant {
 }
 
 model MerchantSettings {
-  id                      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId              String  @unique @db.Uuid
-  defaultVehicleType      VehicleType @default(BODA)
-  defaultPaymentMethod    PaymentMethod @default(MPESA_STK)
-  notifyOnPickup          Boolean @default(true)
-  notifyOnDelivery        Boolean @default(true)
-  notifyRecipientBySms    Boolean @default(true)
-  requirePhotoProof       Boolean @default(false)
-  autoRebook              Boolean @default(false)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId           String        @unique @db.Uuid
+  defaultVehicleType   VehicleType   @default(BODA)
+  defaultPaymentMethod PaymentMethod @default(MPESA_STK)
+  notifyOnPickup       Boolean       @default(true)
+  notifyOnDelivery     Boolean       @default(true)
+  notifyRecipientBySms Boolean       @default(true)
+  requirePhotoProof    Boolean       @default(false)
+  autoRebook           Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
@@ -532,14 +558,14 @@ model MerchantSettings {
 }
 
 model SavedContact {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId  String    @db.Uuid
-  name        String    @db.VarChar(100)
-  phone       String    @db.VarChar(20)
-  notes       String?
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId String    @db.Uuid
+  name       String    @db.VarChar(100)
+  phone      String    @db.VarChar(20)
+  notes      String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
@@ -555,7 +581,7 @@ model Address {
   building     String?   @db.VarChar(200)
   area         String    @db.VarChar(100)
   town         String    @db.VarChar(100) // 'Kilifi' | 'Malindi' | 'Mombasa'
-  instructions String?   // delivery instructions
+  instructions String? // delivery instructions
   // PostGIS geography stored as raw SQL - accessed via $queryRaw
   // lat/lng stored for convenience
   latitude     Decimal?  @db.Decimal(10, 7)
@@ -565,9 +591,9 @@ model Address {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  merchant      Merchant? @relation(fields: [merchantId], references: [id])
-  pickupJobs    Job[]     @relation("PickupAddress")
-  dropoffJobs   Job[]     @relation("DropoffAddress")
+  merchant    Merchant? @relation(fields: [merchantId], references: [id])
+  pickupJobs  Job[]     @relation("PickupAddress")
+  dropoffJobs Job[]     @relation("DropoffAddress")
 
   @@index([merchantId])
   @@index([town])
@@ -579,37 +605,37 @@ model Address {
 // =============================================================================
 
 model Rider {
-  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId               String             @unique @db.Uuid
-  nationalIdEncrypted  String?            // AES-256-GCM encrypted
-  keyId                String?            @db.VarChar(20)
-  verificationStatus   VerificationStatus @default(PENDING)
-  verifiedAt           DateTime?
-  verifiedBy           String?            @db.Uuid
-  onlineStatus         RiderOnlineStatus  @default(OFFLINE)
-  lastOnlineAt         DateTime?
-  lastOfflineAt        DateTime?
-  zoneId               String?            @db.Uuid
-  averageRating        Decimal?           @db.Decimal(3, 2)
-  ratingCount          Int                @default(0)
-  totalDeliveries      Int                @default(0)
-  walletId             String?            @unique @db.Uuid
-  deletedAt            DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String             @unique @db.Uuid
+  nationalIdEncrypted String? // AES-256-GCM encrypted
+  keyId               String?            @db.VarChar(20)
+  verificationStatus  VerificationStatus @default(PENDING)
+  verifiedAt          DateTime?
+  verifiedBy          String?            @db.Uuid
+  onlineStatus        RiderOnlineStatus  @default(OFFLINE)
+  lastOnlineAt        DateTime?
+  lastOfflineAt       DateTime?
+  zoneId              String?            @db.Uuid
+  averageRating       Decimal?           @db.Decimal(3, 2)
+  ratingCount         Int                @default(0)
+  totalDeliveries     Int                @default(0)
+  walletId            String?            @unique @db.Uuid
+  deletedAt           DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  user                User                     @relation(fields: [userId], references: [id])
-  documents           RiderDocument[]
-  verificationEvents  RiderVerificationEvent[]
-  vehicles            RiderVehicleAssignment[]
-  availability        RiderAvailability[]
-  locationState       RiderLocationState?
-  trackingPoints      TrackingPoint[]
-  jobOffers           JobOffer[]
-  jobs                Job[]                    @relation("AssignedRider")
-  ratings             Rating[]
-  wallet              Wallet?                  @relation(fields: [walletId], references: [id])
-  pushSubscriptions   PushSubscription[]
+  user               User                     @relation(fields: [userId], references: [id])
+  documents          RiderDocument[]
+  verificationEvents RiderVerificationEvent[]
+  vehicles           RiderVehicleAssignment[]
+  availability       RiderAvailability[]
+  locationState      RiderLocationState?
+  trackingPoints     TrackingPoint[]
+  jobOffers          JobOffer[]
+  jobs               Job[]                    @relation("AssignedRider")
+  ratings            Rating[]
+  wallet             Wallet?                  @relation(fields: [walletId], references: [id])
+  pushSubscriptions  PushSubscription[]
 
   @@index([userId])
   @@index([verificationStatus, onlineStatus])
@@ -640,14 +666,14 @@ model RiderDocument {
 }
 
 model RiderVerificationEvent {
-  id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  riderId   String             @db.Uuid
-  actorId   String?            @db.Uuid
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId    String             @db.Uuid
+  actorId    String?            @db.Uuid
   fromStatus VerificationStatus
-  toStatus  VerificationStatus
-  reason    String?
-  notes     String?
-  createdAt DateTime           @default(now())
+  toStatus   VerificationStatus
+  reason     String?
+  notes      String?
+  createdAt  DateTime           @default(now())
 
   rider Rider @relation(fields: [riderId], references: [id])
 
@@ -656,16 +682,16 @@ model RiderVerificationEvent {
 }
 
 model Vehicle {
-  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type         VehicleType
-  make         String?     @db.VarChar(100)
-  model        String?     @db.VarChar(100)
-  year         Int?
-  plateNumber  String      @unique @db.VarChar(20)
-  color        String?     @db.VarChar(50)
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type        VehicleType
+  make        String?     @db.VarChar(100)
+  model       String?     @db.VarChar(100)
+  year        Int?
+  plateNumber String      @unique @db.VarChar(20)
+  color       String?     @db.VarChar(50)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   riderAssignments RiderVehicleAssignment[]
 
@@ -692,7 +718,7 @@ model RiderVehicleAssignment {
 model RiderAvailability {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   riderId   String   @db.Uuid
-  dayOfWeek Int      // 0=Sunday ... 6=Saturday
+  dayOfWeek Int // 0=Sunday ... 6=Saturday
   startTime String   @db.VarChar(5) // "HH:MM"
   endTime   String   @db.VarChar(5)
   createdAt DateTime @default(now())
@@ -705,17 +731,17 @@ model RiderAvailability {
 }
 
 model RiderLocationState {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  riderId       String    @unique @db.Uuid
-  latitude      Decimal   @db.Decimal(10, 7)
-  longitude     Decimal   @db.Decimal(10, 7)
-  accuracy      Decimal?  @db.Decimal(8, 2) // meters
-  heading       Decimal?  @db.Decimal(5, 2) // degrees 0-360
-  speed         Decimal?  @db.Decimal(6, 2) // m/s
-  altitude      Decimal?  @db.Decimal(8, 2) // meters
-  recordedAt    DateTime  // device timestamp
-  receivedAt    DateTime  @default(now())
-  isStale       Boolean   @default(false)
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId    String   @unique @db.Uuid
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  accuracy   Decimal? @db.Decimal(8, 2) // meters
+  heading    Decimal? @db.Decimal(5, 2) // degrees 0-360
+  speed      Decimal? @db.Decimal(6, 2) // m/s
+  altitude   Decimal? @db.Decimal(8, 2) // meters
+  recordedAt DateTime // device timestamp
+  receivedAt DateTime @default(now())
+  isStale    Boolean  @default(false)
 
   rider Rider @relation(fields: [riderId], references: [id])
 
@@ -737,32 +763,34 @@ model ServiceZone {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  pricingRules       PricingRule[]
+  pricingRules         PricingRule[]
   zonePricingOverrides ZonePricingOverride[]
-  jobs               Job[]
+  routeQuotes          RouteQuote[]
+  jobs                 Job[]
 
   @@map("service_zones")
 }
 
 model PricingRule {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  zoneId         String?     @db.Uuid // null = global default
-  vehicleType    VehicleType
-  baseFare       Int         // minor units
-  perKmRate      Int         // minor units per km
-  minimumFare    Int         // minor units
-  isActive       Boolean     @default(true)
-  effectiveFrom  DateTime    @default(now())
-  effectiveTo    DateTime?
-  version        Int         @default(1)
-  createdBy      String?     @db.Uuid
-  notes          String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  zoneId        String?     @db.Uuid // null = global default
+  vehicleType   VehicleType
+  riderShareBps Int? // 0-10000; null means earnings are not configured
+  baseFare      Int // minor units
+  perKmRate     Int // minor units per km
+  minimumFare   Int // minor units
+  isActive      Boolean     @default(true)
+  effectiveFrom DateTime    @default(now())
+  effectiveTo   DateTime?
+  version       Int         @default(1)
+  createdBy     String?     @db.Uuid
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  zone             ServiceZone?         @relation(fields: [zoneId], references: [id])
+  zone              ServiceZone?           @relation(fields: [zoneId], references: [id])
   parcelMultipliers ParcelSizeMultiplier[]
-  routeQuotes      RouteQuote[]
+  routeQuotes       RouteQuote[]
 
   @@index([zoneId, vehicleType, isActive])
   @@index([effectiveFrom, effectiveTo])
@@ -800,26 +828,29 @@ model RouteQuote {
   id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   merchantId       String         @db.Uuid
   pricingRuleId    String         @db.Uuid
+  zoneId           String?        @db.Uuid
+  riderShareBps    Int?
   vehicleType      VehicleType
   parcelSize       ParcelSize
   pickupLat        Decimal        @db.Decimal(10, 7)
   pickupLng        Decimal        @db.Decimal(10, 7)
   dropoffLat       Decimal        @db.Decimal(10, 7)
   dropoffLng       Decimal        @db.Decimal(10, 7)
-  distanceMeters   Int            // road or haversine distance
+  distanceMeters   Int // road or haversine distance
   distanceSource   DistanceSource
-  baseFare         Int            // minor units
-  distanceFare     Int            // minor units
+  baseFare         Int // minor units
+  distanceFare     Int // minor units
   parcelMultiplier Decimal        @db.Decimal(4, 2)
   surcharge        Int            @default(0)
-  totalAmount      Int            // minor units
+  totalAmount      Int // minor units
   currency         String         @default("KES") @db.VarChar(3)
-  breakdown        Json           // full calculation breakdown
+  breakdown        Json // full calculation breakdown
   expiresAt        DateTime
   usedAt           DateTime?
   createdAt        DateTime       @default(now())
 
-  pricingRule PricingRule @relation(fields: [pricingRuleId], references: [id])
+  pricingRule PricingRule  @relation(fields: [pricingRuleId], references: [id])
+  zone        ServiceZone? @relation(fields: [zoneId], references: [id])
   jobs        Job[]
 
   @@index([merchantId, expiresAt])
@@ -832,106 +863,109 @@ model RouteQuote {
 // =============================================================================
 
 model Job {
-  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  referenceCode         String                 @unique @db.VarChar(20) // e.g. "HRK-20241017-XXXX"
-  merchantId            String                 @db.Uuid
-  riderId               String?                @db.Uuid
-  zoneId                String?                @db.Uuid
-  quoteId               String?                @db.Uuid
-  pickupAddressId       String?                @db.Uuid
-  dropoffAddressId      String?                @db.Uuid
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referenceCode    String  @unique @db.VarChar(20) // e.g. "HRK-20241017-XXXX"
+  merchantId       String  @db.Uuid
+  riderId          String? @db.Uuid
+  zoneId           String? @db.Uuid
+  quoteId          String? @db.Uuid
+  pickupAddressId  String? @db.Uuid
+  dropoffAddressId String? @db.Uuid
 
   // Pickup details (snapshot at booking time)
-  pickupStreet          String                 @db.VarChar(300)
-  pickupBuilding        String?                @db.VarChar(200)
-  pickupArea            String                 @db.VarChar(100)
-  pickupTown            String                 @db.VarChar(100)
-  pickupInstructions    String?
-  pickupLat             Decimal                @db.Decimal(10, 7)
-  pickupLng             Decimal                @db.Decimal(10, 7)
+  pickupStreet       String  @db.VarChar(300)
+  pickupBuilding     String? @db.VarChar(200)
+  pickupArea         String  @db.VarChar(100)
+  pickupTown         String  @db.VarChar(100)
+  pickupInstructions String?
+  pickupLat          Decimal @db.Decimal(10, 7)
+  pickupLng          Decimal @db.Decimal(10, 7)
 
   // Dropoff details (snapshot at booking time)
-  dropoffStreet         String                 @db.VarChar(300)
-  dropoffBuilding       String?                @db.VarChar(200)
-  dropoffArea           String                 @db.VarChar(100)
-  dropoffTown           String                 @db.VarChar(100)
-  dropoffInstructions   String?
-  dropoffLat            Decimal                @db.Decimal(10, 7)
-  dropoffLng            Decimal                @db.Decimal(10, 7)
+  dropoffStreet       String  @db.VarChar(300)
+  dropoffBuilding     String? @db.VarChar(200)
+  dropoffArea         String  @db.VarChar(100)
+  dropoffTown         String  @db.VarChar(100)
+  dropoffInstructions String?
+  dropoffLat          Decimal @db.Decimal(10, 7)
+  dropoffLng          Decimal @db.Decimal(10, 7)
 
   // Recipient details
-  recipientName         String                 @db.VarChar(100)
-  recipientPhone        String                 @db.VarChar(20)
+  recipientName  String @db.VarChar(100)
+  recipientPhone String @db.VarChar(20)
 
   // Parcel details
-  vehicleType           VehicleType
-  parcelSize            ParcelSize
-  parcelDescription     String?
-  isFragile             Boolean                @default(false)
+  vehicleType       VehicleType
+  parcelSize        ParcelSize
+  parcelDescription String?
+  isFragile         Boolean     @default(false)
 
   // Pricing
-  quotedAmount          Int                    // minor units (locked at booking)
-  finalAmount           Int?                   // minor units (set at completion)
-  currency              String                 @default("KES") @db.VarChar(3)
-  paymentMethod         PaymentMethod
-  distanceMeters        Int
-  distanceSource        DistanceSource
+  quotedAmount     Int // minor units (locked at booking)
+  riderShareBps    Int?
+  riderShareAmount Int? // minor units, rounded half-up from quoted fare
+  finalAmount      Int? // minor units (set at completion)
+  currency         String         @default("KES") @db.VarChar(3)
+  paymentMethod    PaymentMethod
+  distanceMeters   Int
+  distanceSource   DistanceSource
 
   // Status
-  status                JobStatus              @default(REQUESTED)
-  cancellationReason    JobCancellationReason?
-  cancellationNote      String?
-  cancelledBy           String?                @db.Uuid
+  status             JobStatus              @default(REQUESTED)
+  cancellationReason JobCancellationReason?
+  cancellationNote   String?
+  cancelledBy        String?                @db.Uuid
 
   // Scheduling
-  scheduledFor          DateTime?              // for future scheduling feature
-  isScheduled           Boolean                @default(false)
-  isRecurring           Boolean                @default(false)
-  recurringConfig       Json?
+  scheduledFor    DateTime? // for future scheduling feature
+  isScheduled     Boolean   @default(false)
+  isRecurring     Boolean   @default(false)
+  recurringConfig Json?
 
   // Verification
-  pickupPinHash         String                 // argon2id hash of pickup PIN
-  deliveryPinHash       String                 // argon2id hash of delivery PIN
-  pickupVerifiedAt      DateTime?
-  deliveryVerifiedAt    DateTime?
+  pickupPinHash      String // argon2id hash of pickup PIN
+  deliveryPinHash    String // argon2id hash of delivery PIN
+  pickupVerifiedAt   DateTime?
+  deliveryVerifiedAt DateTime?
 
   // Tracking
-  publicTrackingToken   String?                @unique @db.VarChar(64)
+  publicTrackingToken    String?   @unique @db.VarChar(64)
   trackingTokenExpiresAt DateTime?
 
   // Timing
-  estimatedPickupAt     DateTime?
-  estimatedDeliveryAt   DateTime?
-  actualPickupAt        DateTime?
-  actualDeliveryAt      DateTime?
+  estimatedPickupAt   DateTime?
+  estimatedDeliveryAt DateTime?
+  actualPickupAt      DateTime?
+  actualDeliveryAt    DateTime?
 
   // Ratings
-  merchantRatingId      String?                @db.Uuid
-  offerAttemptCount     Int                    @default(0)
+  merchantRatingId  String? @db.Uuid
+  offerAttemptCount Int     @default(0)
 
   // Version for optimistic concurrency
-  version               Int                    @default(1)
+  version Int @default(1)
 
-  deletedAt             DateTime?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  merchant        Merchant          @relation(fields: [merchantId], references: [id])
-  rider           Rider?            @relation("AssignedRider", fields: [riderId], references: [id])
-  zone            ServiceZone?      @relation(fields: [zoneId], references: [id])
-  quote           RouteQuote?       @relation(fields: [quoteId], references: [id])
-  pickupAddress   Address?          @relation("PickupAddress", fields: [pickupAddressId], references: [id])
-  dropoffAddress  Address?          @relation("DropoffAddress", fields: [dropoffAddressId], references: [id])
-  events          JobEvent[]
-  stateHistory    JobStateHistory[]
-  offers          JobOffer[]
-  trackingPoints  TrackingPoint[]
-  payments        Payment[]
-  verification    DeliveryVerification?
-  deliveryPhotos  DeliveryPhoto[]
-  disputes        Dispute[]
-  ratings         Rating[]
-  outboxEvents    OutboxEvent[]
+  merchant                   Merchant              @relation(fields: [merchantId], references: [id])
+  rider                      Rider?                @relation("AssignedRider", fields: [riderId], references: [id])
+  zone                       ServiceZone?          @relation(fields: [zoneId], references: [id])
+  quote                      RouteQuote?           @relation(fields: [quoteId], references: [id])
+  pickupAddress              Address?              @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  dropoffAddress             Address?              @relation("DropoffAddress", fields: [dropoffAddressId], references: [id])
+  events                     JobEvent[]
+  stateHistory               JobStateHistory[]
+  offers                     JobOffer[]
+  trackingPoints             TrackingPoint[]
+  payments                   Payment[]
+  verification               DeliveryVerification?
+  deliveryPhotos             DeliveryPhoto[]
+  disputes                   Dispute[]
+  ratings                    Rating[]
+  outboxEvents               OutboxEvent[]
+  financialLedgerTransaction LedgerTransaction?    @relation("JobFinancialTransaction")
 
   @@index([merchantId, status])
   @@index([riderId, status])
@@ -944,14 +978,14 @@ model Job {
 }
 
 model JobEvent {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId       String    @db.Uuid
-  actorId     String?   @db.Uuid
-  actorRole   String?   @db.VarChar(50)
-  eventType   String    @db.VarChar(100) // matches AuditAction or custom job event
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String   @db.Uuid
+  actorId     String?  @db.Uuid
+  actorRole   String?  @db.VarChar(50)
+  eventType   String   @db.VarChar(100) // matches AuditAction or custom job event
   description String?
   metadata    Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   job Job @relation(fields: [jobId], references: [id])
 
@@ -960,14 +994,14 @@ model JobEvent {
 }
 
 model JobStateHistory {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId       String    @db.Uuid
-  actorId     String?   @db.Uuid
-  fromStatus  JobStatus
-  toStatus    JobStatus
-  reason      String?
-  metadata    Json?
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId      String    @db.Uuid
+  actorId    String?   @db.Uuid
+  fromStatus JobStatus
+  toStatus   JobStatus
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
 
   job Job @relation(fields: [jobId], references: [id])
 
@@ -976,16 +1010,16 @@ model JobStateHistory {
 }
 
 model JobOffer {
-  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId         String      @db.Uuid
-  riderId       String      @db.Uuid
-  status        OfferStatus @default(PENDING)
-  distanceMeters Int?       // rider to pickup distance at offer time
-  offeredAt     DateTime    @default(now())
-  expiresAt     DateTime
-  respondedAt   DateTime?
-  declineReason String?
-  bullJobId     String?     // BullMQ job ID for expiry task
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId          String      @db.Uuid
+  riderId        String      @db.Uuid
+  status         OfferStatus @default(PENDING)
+  distanceMeters Int? // rider to pickup distance at offer time
+  offeredAt      DateTime    @default(now())
+  expiresAt      DateTime
+  respondedAt    DateTime?
+  declineReason  String?
+  bullJobId      String? // BullMQ job ID for expiry task
 
   job   Job   @relation(fields: [jobId], references: [id])
   rider Rider @relation(fields: [riderId], references: [id])
@@ -997,16 +1031,16 @@ model JobOffer {
 }
 
 model TrackingPoint {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId       String   @db.Uuid
-  riderId     String   @db.Uuid
-  latitude    Decimal  @db.Decimal(10, 7)
-  longitude   Decimal  @db.Decimal(10, 7)
-  accuracy    Decimal? @db.Decimal(8, 2)
-  heading     Decimal? @db.Decimal(5, 2)
-  speed       Decimal? @db.Decimal(6, 2)
-  recordedAt  DateTime
-  receivedAt  DateTime @default(now())
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId      String   @db.Uuid
+  riderId    String   @db.Uuid
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  accuracy   Decimal? @db.Decimal(8, 2)
+  heading    Decimal? @db.Decimal(5, 2)
+  speed      Decimal? @db.Decimal(6, 2)
+  recordedAt DateTime
+  receivedAt DateTime @default(now())
 
   job   Job   @relation(fields: [jobId], references: [id])
   rider Rider @relation(fields: [riderId], references: [id])
@@ -1032,16 +1066,16 @@ model PublicTrackingToken {
 }
 
 model DeliveryVerification {
-  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId                 String    @unique @db.Uuid
-  pickupAttempts        Int       @default(0)
-  pickupLockedUntil     DateTime?
-  deliveryAttempts      Int       @default(0)
-  deliveryLockedUntil   DateTime?
-  deliveryConfirmedAt   DateTime?
-  confirmedByRiderId    String?   @db.Uuid
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId               String    @unique @db.Uuid
+  pickupAttempts      Int       @default(0)
+  pickupLockedUntil   DateTime?
+  deliveryAttempts    Int       @default(0)
+  deliveryLockedUntil DateTime?
+  deliveryConfirmedAt DateTime?
+  confirmedByRiderId  String?   @db.Uuid
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   job Job @relation(fields: [jobId], references: [id])
 
@@ -1070,31 +1104,31 @@ model DeliveryPhoto {
 // =============================================================================
 
 model Payment {
-  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId                 String        @db.Uuid
-  merchantId            String        @db.Uuid
-  method                PaymentMethod
-  status                PaymentStatus @default(PENDING)
-  amount                Int           // minor units
-  currency              String        @default("KES") @db.VarChar(3)
-  idempotencyKey        String?       @unique @db.VarChar(100)
-  providerRef           String?       @unique @db.VarChar(200) // M-Pesa MerchantRequestID or CheckoutRequestID
-  providerTxnRef        String?       @unique @db.VarChar(200) // M-Pesa MpesaReceiptNumber
-  phoneNumber           String?       @db.VarChar(20)
-  description           String?
-  failureReason         String?
-  processedAt           DateTime?
-  refundedAt            DateTime?
-  refundAmount          Int?
-  metadata              Json?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId          String        @db.Uuid
+  merchantId     String        @db.Uuid
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  amount         Int // minor units
+  currency       String        @default("KES") @db.VarChar(3)
+  idempotencyKey String?       @unique @db.VarChar(100)
+  providerRef    String?       @unique @db.VarChar(200) // M-Pesa MerchantRequestID or CheckoutRequestID
+  providerTxnRef String?       @unique @db.VarChar(200) // M-Pesa MpesaReceiptNumber
+  phoneNumber    String?       @db.VarChar(20)
+  description    String?
+  failureReason  String?
+  processedAt    DateTime?
+  refundedAt     DateTime?
+  refundAmount   Int?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  job             Job                      @relation(fields: [jobId], references: [id])
-  providerEvents  PaymentProviderEvent[]
-  codRecord       CodRecord?
-  ledgerTxn       LedgerTransaction?
-  refunds         Refund[]
+  job            Job                    @relation(fields: [jobId], references: [id])
+  providerEvents PaymentProviderEvent[]
+  codRecord      CodRecord?
+  ledgerTxn      LedgerTransaction?
+  refunds        Refund[]
 
   @@index([jobId])
   @@index([merchantId, status])
@@ -1104,16 +1138,16 @@ model Payment {
 }
 
 model PaymentProviderEvent {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId      String?   @db.Uuid
-  provider       String    @db.VarChar(50) // 'mpesa' | 'internal'
-  eventType      String    @db.VarChar(100)
-  providerRef    String?   @db.VarChar(200)
-  rawPayload     Json      // complete provider payload (mask sensitive fields)
-  processedAt    DateTime?
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId       String?   @db.Uuid
+  provider        String    @db.VarChar(50) // 'mpesa' | 'internal'
+  eventType       String    @db.VarChar(100)
+  providerRef     String?   @db.VarChar(200)
+  rawPayload      Json // complete provider payload (mask sensitive fields)
+  processedAt     DateTime?
   processingError String?
-  isDuplicate    Boolean   @default(false)
-  createdAt      DateTime  @default(now())
+  isDuplicate     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
 
   payment Payment? @relation(fields: [paymentId], references: [id])
 
@@ -1124,21 +1158,21 @@ model PaymentProviderEvent {
 }
 
 model CodRecord {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId           String    @unique @db.Uuid
-  jobId               String    @db.Uuid
-  riderId             String    @db.Uuid
-  amount              Int       // minor units
-  currency            String    @default("KES") @db.VarChar(3)
-  status              CODStatus @default(PENDING_COLLECTION)
-  collectedAt         DateTime?
-  collectionConfirmedBy String? @db.Uuid
-  settlementDue       DateTime?
-  settledAt           DateTime?
-  settledBy           String?   @db.Uuid
-  notes               String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId             String    @unique @db.Uuid
+  jobId                 String    @db.Uuid
+  riderId               String    @db.Uuid
+  amount                Int // minor units
+  currency              String    @default("KES") @db.VarChar(3)
+  status                CODStatus @default(PENDING_COLLECTION)
+  collectedAt           DateTime?
+  collectionConfirmedBy String?   @db.Uuid
+  settlementDue         DateTime?
+  settledAt             DateTime?
+  settledBy             String?   @db.Uuid
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   payment Payment @relation(fields: [paymentId], references: [id])
 
@@ -1148,16 +1182,16 @@ model CodRecord {
 }
 
 model Wallet {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ownerId    String   @unique @db.Uuid // userId
-  ownerType  String   @db.VarChar(20) // 'merchant' | 'rider' | 'platform'
-  currency   String   @default("KES") @db.VarChar(3)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId   String   @unique @db.Uuid // userId
+  ownerType String   @db.VarChar(20) // 'merchant' | 'rider' | 'platform'
+  currency  String   @default("KES") @db.VarChar(3)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  merchants  Merchant[]
-  riders     Rider[]
+  merchants     Merchant[]
+  riders        Rider[]
   ledgerAccount LedgerAccount?
 
   @@index([ownerId])
@@ -1165,41 +1199,43 @@ model Wallet {
 }
 
 model LedgerAccount {
-  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  walletId    String?           @unique @db.Uuid
-  code        String            @unique @db.VarChar(50) // e.g. "PLATFORM_REVENUE", "RIDER:uuid"
-  name        String            @db.VarChar(100)
-  type        LedgerAccountType
-  currency    String            @default("KES") @db.VarChar(3)
-  isActive    Boolean           @default(true)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId  String?           @unique @db.Uuid
+  code      String            @unique @db.VarChar(50) // e.g. "PLATFORM_REVENUE", "RIDER:uuid"
+  name      String            @db.VarChar(100)
+  type      LedgerAccountType
+  currency  String            @default("KES") @db.VarChar(3)
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
-  wallet       Wallet?           @relation(fields: [walletId], references: [id])
-  debitEntries LedgerEntry[]     @relation("DebitAccount")
-  creditEntries LedgerEntry[]    @relation("CreditAccount")
+  wallet        Wallet?       @relation(fields: [walletId], references: [id])
+  debitEntries  LedgerEntry[] @relation("DebitAccount")
+  creditEntries LedgerEntry[] @relation("CreditAccount")
 
   @@index([code])
   @@map("ledger_accounts")
 }
 
 model LedgerTransaction {
-  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  reference       String          @unique @db.VarChar(100)
-  type            TransactionType
-  paymentId       String?         @unique @db.Uuid
-  payoutId        String?         @unique @db.Uuid
-  refundId        String?         @unique @db.Uuid
-  description     String
-  currency        String          @default("KES") @db.VarChar(3)
-  totalAmount     Int             // minor units (sum of debit entries)
-  actorId         String?         @db.Uuid
-  postedAt        DateTime        @default(now())
-  reversedAt      DateTime?
-  reversalTxnId   String?         @db.Uuid
-  metadata        Json?
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference     String          @unique @db.VarChar(100)
+  type          TransactionType
+  paymentId     String?         @unique @db.Uuid
+  payoutId      String?         @unique @db.Uuid
+  refundId      String?         @unique @db.Uuid
+  jobId         String?         @unique @db.Uuid
+  description   String
+  currency      String          @default("KES") @db.VarChar(3)
+  totalAmount   Int // minor units (sum of debit entries)
+  actorId       String?         @db.Uuid
+  postedAt      DateTime        @default(now())
+  reversedAt    DateTime?
+  reversalTxnId String?         @db.Uuid
+  metadata      Json?
 
-  payment Payment?       @relation(fields: [paymentId], references: [id])
+  payment Payment?      @relation(fields: [paymentId], references: [id])
+  job     Job?          @relation("JobFinancialTransaction", fields: [jobId], references: [id])
   entries LedgerEntry[]
 
   @@index([reference])
@@ -1209,14 +1245,14 @@ model LedgerTransaction {
 }
 
 model LedgerEntry {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  transactionId String   @db.Uuid
-  debitAccountId  String @db.Uuid
-  creditAccountId String @db.Uuid
-  amount        Int      // minor units (always positive)
-  currency      String   @default("KES") @db.VarChar(3)
-  description   String?
-  createdAt     DateTime @default(now())
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId   String   @db.Uuid
+  debitAccountId  String   @db.Uuid
+  creditAccountId String   @db.Uuid
+  amount          Int // minor units (always positive)
+  currency        String   @default("KES") @db.VarChar(3)
+  description     String?
+  createdAt       DateTime @default(now())
 
   transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
   debitAccount  LedgerAccount     @relation("DebitAccount", fields: [debitAccountId], references: [id])
@@ -1231,7 +1267,7 @@ model LedgerEntry {
 model Payout {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   riderId       String       @db.Uuid
-  amount        Int          // minor units
+  amount        Int // minor units
   currency      String       @default("KES") @db.VarChar(3)
   status        PayoutStatus @default(PENDING)
   method        String       @db.VarChar(50) // 'mpesa_b2c' | 'manual'
@@ -1251,17 +1287,17 @@ model Payout {
 }
 
 model Refund {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId     String        @db.Uuid
-  amount        Int           // minor units
-  currency      String        @default("KES") @db.VarChar(3)
-  reason        String
-  status        PaymentStatus @default(PENDING)
-  providerRef   String?       @db.VarChar(200)
-  processedAt   DateTime?
-  approvedBy    String?       @db.Uuid
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId   String        @db.Uuid
+  amount      Int // minor units
+  currency    String        @default("KES") @db.VarChar(3)
+  reason      String
+  status      PaymentStatus @default(PENDING)
+  providerRef String?       @db.VarChar(200)
+  processedAt DateTime?
+  approvedBy  String?       @db.Uuid
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   payment Payment @relation(fields: [paymentId], references: [id])
 
@@ -1270,18 +1306,18 @@ model Refund {
 }
 
 model ReconciliationRecord {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  periodStart     DateTime
-  periodEnd       DateTime
-  totalJobs       Int
-  totalRevenue    Int      // minor units
-  totalPayouts    Int      // minor units
-  totalRefunds    Int      // minor units
-  discrepancies   Json?
-  resolvedAt      DateTime?
-  notes           String?
-  createdBy       String?  @db.Uuid
-  createdAt       DateTime @default(now())
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  periodStart   DateTime
+  periodEnd     DateTime
+  totalJobs     Int
+  totalRevenue  Int // minor units
+  totalPayouts  Int // minor units
+  totalRefunds  Int // minor units
+  discrepancies Json?
+  resolvedAt    DateTime?
+  notes         String?
+  createdBy     String?   @db.Uuid
+  createdAt     DateTime  @default(now())
 
   @@index([periodStart, periodEnd])
   @@map("reconciliation_records")
@@ -1307,17 +1343,17 @@ model IdempotencyKey {
 // =============================================================================
 
 model OutboxEvent {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eventType   OutboxEventType
-  jobId       String?        @db.Uuid
-  payload     Json
-  attempts    Int            @default(0)
-  maxAttempts Int            @default(5)
-  processedAt DateTime?
-  nextRetryAt DateTime?
-  failedAt    DateTime?
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType    OutboxEventType
+  jobId        String?         @db.Uuid
+  payload      Json
+  attempts     Int             @default(0)
+  maxAttempts  Int             @default(5)
+  processedAt  DateTime?
+  nextRetryAt  DateTime?
+  failedAt     DateTime?
   errorMessage String?
-  createdAt   DateTime       @default(now())
+  createdAt    DateTime        @default(now())
 
   job Job? @relation(fields: [jobId], references: [id])
 
@@ -1327,15 +1363,15 @@ model OutboxEvent {
 }
 
 model DeadLetterEvent {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  outboxEventId String?  @db.Uuid
-  eventType     String   @db.VarChar(100)
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outboxEventId String?   @db.Uuid
+  eventType     String    @db.VarChar(100)
   payload       Json
   failureReason String
   attempts      Int
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
   resolvedAt    DateTime?
-  resolvedBy    String?  @db.Uuid
+  resolvedBy    String?   @db.Uuid
 
   @@index([eventType, createdAt])
   @@index([resolvedAt])
@@ -1372,13 +1408,13 @@ model Notification {
 }
 
 model NotificationAttempt {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  notificationId String    @db.Uuid
-  providerRef    String?   @db.VarChar(200)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String   @db.Uuid
+  providerRef    String?  @db.VarChar(200)
   success        Boolean
-  responseCode   String?   @db.VarChar(20)
+  responseCode   String?  @db.VarChar(20)
   responseBody   String?
-  attemptedAt    DateTime  @default(now())
+  attemptedAt    DateTime @default(now())
 
   notification Notification @relation(fields: [notificationId], references: [id])
 
@@ -1387,15 +1423,15 @@ model NotificationAttempt {
 }
 
 model SmsTemplate {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  key         SmsTemplateKey
-  language    String         @db.VarChar(5) // 'en' | 'sw'
-  body        String         // template with {{variable}} placeholders
-  version     Int            @default(1)
-  isActive    Boolean        @default(true)
-  createdBy   String?        @db.Uuid
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key       SmsTemplateKey
+  language  String         @db.VarChar(5) // 'en' | 'sw'
+  body      String // template with {{variable}} placeholders
+  version   Int            @default(1)
+  isActive  Boolean        @default(true)
+  createdBy String?        @db.Uuid
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@unique([key, language, version])
   @@index([key, language, isActive])
@@ -1403,15 +1439,15 @@ model SmsTemplate {
 }
 
 model PushSubscription {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  riderId     String   @db.Uuid
-  endpoint    String   @db.VarChar(1000)
-  p256dh      String   @db.VarChar(500)
-  auth        String   @db.VarChar(200)
-  userAgent   String?  @db.VarChar(500)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId   String   @db.Uuid
+  endpoint  String   @db.VarChar(1000)
+  p256dh    String   @db.VarChar(500)
+  auth      String   @db.VarChar(200)
+  userAgent String?  @db.VarChar(500)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   rider Rider @relation(fields: [riderId], references: [id])
 
@@ -1425,20 +1461,20 @@ model PushSubscription {
 // =============================================================================
 
 model Dispute {
-  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId        String           @db.Uuid
-  reportedBy   String           @db.Uuid
-  reporterRole String           @db.VarChar(20) // 'merchant' | 'rider' | 'recipient'
-  status       DisputeStatus    @default(OPEN)
-  category     String           @db.VarChar(50) // 'missing_item' | 'late_delivery' | 'damaged' etc
-  description  String
-  resolution   DisputeResolution?
-  resolvedBy   String?          @db.Uuid
-  resolvedAt   DateTime?
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId          String             @db.Uuid
+  reportedBy     String             @db.Uuid
+  reporterRole   String             @db.VarChar(20) // 'merchant' | 'rider' | 'recipient'
+  status         DisputeStatus      @default(OPEN)
+  category       String             @db.VarChar(50) // 'missing_item' | 'late_delivery' | 'damaged' etc
+  description    String
+  resolution     DisputeResolution?
+  resolvedBy     String?            @db.Uuid
+  resolvedAt     DateTime?
   resolutionNote String?
-  refundAmount Int?             // minor units
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  refundAmount   Int? // minor units
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   job Job @relation(fields: [jobId], references: [id])
 
@@ -1448,15 +1484,15 @@ model Dispute {
 }
 
 model Rating {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId       String   @db.Uuid
-  riderId     String   @db.Uuid
-  ratedBy     String   @db.Uuid // merchantId or public recipient identifier
-  raterRole   String   @db.VarChar(20) // 'merchant' | 'recipient'
-  score       Int      // 1-5
-  comment     String?
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId     String   @db.Uuid
+  riderId   String   @db.Uuid
+  ratedBy   String   @db.Uuid // merchantId or public recipient identifier
+  raterRole String   @db.VarChar(20) // 'merchant' | 'recipient'
+  score     Int // 1-5
+  comment   String?
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   job   Job   @relation(fields: [jobId], references: [id])
   rider Rider @relation(fields: [riderId], references: [id])
@@ -1475,7 +1511,7 @@ model AuditLog {
   action      AuditAction
   resource    String      @db.VarChar(100)
   resourceId  String?     @db.VarChar(100)
-  oldValue    Json?       // redacted sensitive fields
+  oldValue    Json? // redacted sensitive fields
   newValue    Json?
   ipAddress   String?     @db.VarChar(50)
   userAgent   String?     @db.VarChar(500)
@@ -1496,15 +1532,15 @@ model AuditLog {
 }
 
 model Consent {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String         @db.Uuid
-  purpose     ConsentPurpose
-  version     String         @db.VarChar(20) // policy version e.g. "1.0"
-  granted     Boolean
-  grantedAt   DateTime?
-  revokedAt   DateTime?
-  ipAddress   String?        @db.VarChar(50)
-  createdAt   DateTime       @default(now())
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String         @db.Uuid
+  purpose   ConsentPurpose
+  version   String         @db.VarChar(20) // policy version e.g. "1.0"
+  granted   Boolean
+  grantedAt DateTime?
+  revokedAt DateTime?
+  ipAddress String?        @db.VarChar(50)
+  createdAt DateTime       @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -1524,7 +1560,7 @@ model PrivacyRequest {
   completedAt  DateTime?
   rejectedAt   DateTime?
   rejectReason String?
-  exportPath   String?              // temporary signed URL for data export
+  exportPath   String? // temporary signed URL for data export
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
@@ -1536,13 +1572,13 @@ model PrivacyRequest {
 }
 
 model StaffAssignment {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String    @db.Uuid
-  zoneId      String?   @db.Uuid
-  title       String?   @db.VarChar(100)
-  assignedBy  String?   @db.Uuid
-  assignedAt  DateTime  @default(now())
-  removedAt   DateTime?
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @db.Uuid
+  zoneId     String?   @db.Uuid
+  title      String?   @db.VarChar(100)
+  assignedBy String?   @db.Uuid
+  assignedAt DateTime  @default(now())
+  removedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id])
 

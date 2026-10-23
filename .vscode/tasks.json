@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Provision local Haraka staff accounts",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$env:NODE_ENV = 'development'; $env:HARAKA_ALLOW_LOCAL_STAFF_BOOTSTRAP = '1'; pnpm.cmd --filter @haraka/api bootstrap:local-staff -- --confirm-local-staff-bootstrap"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Local staff bootstrap (interactive)",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"set NODE_ENV=development&& set HARAKA_ALLOW_LOCAL_STAFF_BOOTSTRAP=1&& pnpm.cmd --filter @haraka/api bootstrap:local-staff -- --confirm-local-staff-bootstrap"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

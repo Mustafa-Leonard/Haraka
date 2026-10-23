@@ -11,4 +11,5 @@ export * from './merchant.schema';
 export * from './rider.schema';
 export * from './pricing.schema';
 export * from './payment.schema';
+export * from './payout.schema';
 export * from './phone';

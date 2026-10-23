@@ -1,0 +1,14 @@
+src/routes/admin/AdminLoginPage.tsx(31,35): error TS2339: Property 'requestOtp' does not exist on type 'HarakaApiClient'.
+src/routes/admin/AdminLoginPage.tsx(46,35): error TS2339: Property 'verifyOtp' does not exist on type 'HarakaApiClient'.
+src/routes/public/LoginPage.tsx(179,14): error TS2367: This comparison appears to be unintentional because the types 'PageMode' and '"VERIFY_PHONE"' have no overlap.
+src/routes/public/LoginPage.tsx(222,17): error TS2304: Cannot find name 'setPhoneCodeSent'.
+src/routes/public/LoginPage.tsx(278,10): error TS2367: This comparison appears to be unintentional because the types 'PageMode' and '"VERIFY_PHONE"' have no overlap.
+src/routes/public/LoginPage.tsx(279,12): error TS2304: Cannot find name 'phoneCodeSent'.
+src/routes/public/LoginPage.tsx(280,29): error TS2552: Cannot find name 'handlePhoneVerification'. Did you mean 'handleEmailVerification'?
+src/routes/public/LoginPage.tsx(292,46): error TS2552: Cannot find name 'handlePhoneCodeRequest'. Did you mean 'handlePhoneResetRequest'?
+src/routes/public/LoginPage.tsx(298,28): error TS2552: Cannot find name 'handleEmailVerificationRequest'. Did you mean 'handleEmailVerification'?
+src/routes/public/LoginPage.tsx(307,68): error TS2552: Cannot find name 'handlePhoneCodeRequest'. Did you mean 'handlePhoneResetRequest'?
+src/routes/public/LoginPage.tsx(313,28): error TS2552: Cannot find name 'handleEmailVerificationRequest'. Did you mean 'handleEmailVerification'?
+src/routes/public/LoginPage.tsx(330,19): error TS2304: Cannot find name 'setPhoneCodeSent'.
+src/routes/public/LoginPage.tsx(344,16): error TS2304: Cannot find name 'phoneCodeSent'.
+src/routes/public/LoginPage.tsx(407,17): error TS2304: Cannot find name 'setPhoneCodeSent'.

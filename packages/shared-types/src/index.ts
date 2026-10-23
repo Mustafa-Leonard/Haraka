@@ -15,3 +15,4 @@ export * from './payments';
 export * from './notifications';
 export * from './tracking';
 export * from './api';
+export * from './admin';

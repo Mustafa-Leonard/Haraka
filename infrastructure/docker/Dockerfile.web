@@ -10,21 +10,24 @@ COPY packages/api-client/package.json packages/api-client/
 COPY packages/theme/package.json packages/theme/
 COPY packages/i18n/package.json packages/i18n/
 COPY packages/config/package.json packages/config/
-COPY apps/web/package.json apps/web/
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+COPY apps/worker/package.json apps/worker/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
 COPY packages/ packages/
-COPY apps/web/ apps/web/
+COPY frontend/ frontend/
 COPY tsconfig.base.json ./
 RUN pnpm --filter @haraka/shared-types build
 RUN pnpm --filter @haraka/api-client build
 RUN pnpm --filter @haraka/theme build
 RUN pnpm --filter @haraka/i18n build
 RUN pnpm --filter @haraka/config build
-RUN pnpm --filter web build
+RUN pnpm --filter @haraka/web build
 
 # Serve with Caddy (web container only serves static files via Caddyfile)
 FROM caddy:2-alpine AS runner
-COPY --from=builder /app/apps/web/dist /srv
+COPY --from=builder /app/frontend/dist /srv
+COPY infrastructure/docker/Caddyfile.web /etc/caddy/Caddyfile
 EXPOSE 80

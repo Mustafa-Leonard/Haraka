@@ -3,19 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "description": "Zod validation schemas shared across Haraka applications",
-  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "build": "tsc --build",
+    "build": "tsc",
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@haraka/shared-types": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

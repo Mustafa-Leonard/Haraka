@@ -4,6 +4,8 @@ import type {
   PaginatedResponse,
   AuthTokensDto,
   AuthUser,
+  CustomerPortalRole,
+  LoginRole,
   QuoteRequestDto,
   QuoteResponseDto,
   CreateJobDto,
@@ -14,11 +16,18 @@ import type {
   PublicTrackingDto,
   MerchantDashboardDto,
   RiderEarningsDto,
+  RiderProfileDto,
   AddressDto,
   CreateAddressDto,
   PricingRuleDto,
   ServiceZoneDto,
   LedgerSummaryDto,
+  InitiateMpesaDto,
+  PaymentDto,
+  AdminFleetRiderDto,
+  PasswordLoginResultDto,
+  StaffMfaChallengeDto,
+  TotpEnrollDto,
 } from '@haraka/shared-types';
 
 export class HarakaApiClient {
@@ -52,7 +61,8 @@ export class HarakaApiClient {
         ) {
           originalRequest._retry = true;
           try {
-            const refreshRes = await this.http.post<ApiResponse<{ accessToken: string }>>('/auth/refresh');
+            const refreshRes =
+              await this.http.post<ApiResponse<{ accessToken: string }>>('/auth/refresh');
             const newToken = refreshRes.data.data.accessToken;
             this.setToken(newToken);
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -77,18 +87,96 @@ export class HarakaApiClient {
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
 
-  async requestOtp(phone: string, purpose = 'auth') {
-    const res = await this.http.post<{ message: string }>('/auth/otp/request', { phone, purpose });
+  async beginStaffMfaEnrollment(challengeToken: string) {
+    const res = await this.http.post<ApiResponse<TotpEnrollDto>>('/auth/staff/mfa/enroll', {
+      challengeToken,
+    });
+    return res.data.data;
+  }
+
+  async completeStaffMfa(challengeToken: string, code: string) {
+    const res = await this.http.post<
+      ApiResponse<{ accessToken: string; expiresIn: number; user: AuthUser }>
+    >('/auth/staff/mfa/verify', { challengeToken, code });
+    this.setToken(res.data.data.accessToken);
+    return res.data.data;
+  }
+
+  async register(params: {
+    fullName: string;
+    phone: string;
+    role: CustomerPortalRole;
+    password: string;
+    confirmPassword: string;
+  }) {
+    const res = await this.http.post<
+      ApiResponse<{
+        phone: string;
+        displayName: string;
+      }> & { message: string }
+    >('/auth/register', params);
     return res.data;
   }
 
-  async verifyOtp(phone: string, code: string, purpose = 'auth') {
-    const res = await this.http.post<ApiResponse<{ accessToken: string; expiresIn: number; user: AuthUser }>>(
-      '/auth/otp/verify',
-      { phone, code, purpose },
-    );
-    this.setToken(res.data.data.accessToken);
+  async loginWithPassword(
+    phone: string,
+    password: string,
+    role?: LoginRole,
+  ): Promise<PasswordLoginResultDto> {
+    const res = await this.http.post<ApiResponse<PasswordLoginResultDto>>('/auth/password/login', {
+      phone,
+      password,
+      ...(role ? { role } : {}),
+    });
+    if (!res.data.data.mfaRequired) {
+      this.setToken(res.data.data.accessToken);
+    }
     return res.data.data;
+  }
+
+  async requestPhonePasswordReset(phone: string) {
+    const res = await this.http.post<{ message: string }>('/auth/password/reset/phone/request', {
+      phone,
+    });
+    return res.data;
+  }
+
+  async resetPasswordWithPhone(phone: string, code: string, password: string) {
+    const res = await this.http.post<{ message: string }>('/auth/password/reset/phone/complete', {
+      phone,
+      code,
+      password,
+    });
+    return res.data;
+  }
+
+  async requestEmailPasswordReset(email: string) {
+    const res = await this.http.post<{ message: string }>('/auth/password/reset/email/request', {
+      email,
+    });
+    return res.data;
+  }
+
+  async resetPasswordWithEmail(token: string, password: string) {
+    const res = await this.http.post<{ message: string }>('/auth/password/reset/email/complete', {
+      token,
+      password,
+    });
+    return res.data;
+  }
+
+  async requestEmailVerification(email: string) {
+    const res = await this.http.post<{ message: string }>('/auth/email/verification/request', {
+      email,
+    });
+    return res.data;
+  }
+
+  async verifyEmail(token: string) {
+    const res = await this.http.post<{ message: string }>('/auth/email/verification/complete', {
+      token,
+    });
+    return res.data;
   }
 
   async logout() {
@@ -113,6 +201,11 @@ export class HarakaApiClient {
     return res.data.data;
   }
 
+  async getActiveServiceZones() {
+    const res = await this.http.get<ApiResponse<ServiceZoneDto[]>>('/merchant/pricing/zones');
+    return res.data.data;
+  }
+
   async createJob(params: CreateJobDto, idempotencyKey?: string) {
     const config: AxiosRequestConfig = {};
     if (idempotencyKey) {
@@ -123,7 +216,9 @@ export class HarakaApiClient {
   }
 
   async getMerchantJobs(page = 1, limit = 20) {
-    const res = await this.http.get<PaginatedResponse<JobSummaryDto>>(`/merchant/jobs?page=${page}&limit=${limit}`);
+    const res = await this.http.get<PaginatedResponse<JobSummaryDto>>(
+      `/merchant/jobs?page=${page}&limit=${limit}`,
+    );
     return res.data;
   }
 
@@ -133,7 +228,9 @@ export class HarakaApiClient {
   }
 
   async cancelJob(id: string, reason?: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/merchant/jobs/${id}/cancel`, { reason });
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/merchant/jobs/${id}/cancel`, {
+      reason,
+    });
     return res.data.data;
   }
 
@@ -148,13 +245,24 @@ export class HarakaApiClient {
   }
 
   async deleteAddress(id: string) {
-    const res = await this.http.delete<ApiResponse<{ success: boolean }>>(`/merchant/addresses/${id}`);
+    const res = await this.http.delete<ApiResponse<{ success: boolean }>>(
+      `/merchant/addresses/${id}`,
+    );
     return res.data.data;
   }
 
   async getMerchantPayments(page = 1, limit = 20) {
-    const res = await this.http.get<PaginatedResponse<any>>(`/merchant/payments?page=${page}&limit=${limit}`);
+    const res = await this.http.get<PaginatedResponse<any>>(
+      `/merchant/payments?page=${page}&limit=${limit}`,
+    );
     return res.data;
+  }
+
+  async initiateMpesaPayment(params: InitiateMpesaDto) {
+    const res = await this.http.post<ApiResponse<PaymentDto>>('/merchant/payments/mpesa', params, {
+      headers: params.idempotencyKey ? { 'X-Idempotency-Key': params.idempotencyKey } : undefined,
+    });
+    return res.data.data;
   }
 
   async getMerchantSettings() {
@@ -170,7 +278,9 @@ export class HarakaApiClient {
   // ─── Rider ───────────────────────────────────────────────────────────────────
 
   async setRiderAvailability(online: boolean) {
-    const res = await this.http.post<ApiResponse<{ online: boolean }>>('/rider/availability', { online });
+    const res = await this.http.post<ApiResponse<{ online: boolean }>>('/rider/availability', {
+      online,
+    });
     return res.data.data;
   }
 
@@ -180,12 +290,17 @@ export class HarakaApiClient {
   }
 
   async acceptOffer(offerId: string) {
-    const res = await this.http.post<ApiResponse<{ success: boolean; jobId: string }>>(`/rider/offers/${offerId}/accept`);
+    const res = await this.http.post<ApiResponse<{ success: boolean; jobId: string }>>(
+      `/rider/offers/${offerId}/accept`,
+    );
     return res.data.data;
   }
 
   async declineOffer(offerId: string, declineReason?: string) {
-    const res = await this.http.post<ApiResponse<{ success: boolean }>>(`/rider/offers/${offerId}/decline`, { declineReason });
+    const res = await this.http.post<ApiResponse<{ success: boolean }>>(
+      `/rider/offers/${offerId}/decline`,
+      { declineReason },
+    );
     return res.data.data;
   }
 
@@ -200,22 +315,30 @@ export class HarakaApiClient {
   }
 
   async riderArrivePickup(jobId: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/arrive-pickup`);
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(
+      `/rider/jobs/${jobId}/arrive-pickup`,
+    );
     return res.data.data;
   }
 
   async riderVerifyPickup(jobId: string, pin: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/pickup`, { pin });
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/pickup`, {
+      pin,
+    });
     return res.data.data;
   }
 
   async riderArriveDropoff(jobId: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/arrive-dropoff`);
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(
+      `/rider/jobs/${jobId}/arrive-dropoff`,
+    );
     return res.data.data;
   }
 
   async riderVerifyDelivery(jobId: string, pin: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/deliver`, { pin });
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/rider/jobs/${jobId}/deliver`, {
+      pin,
+    });
     return res.data.data;
   }
 
@@ -224,8 +347,15 @@ export class HarakaApiClient {
     return res.data.data;
   }
 
+  async requestRiderPayout(amount: number) {
+    const res = await this.http.post<
+      ApiResponse<{ id: string; status: string; amount: number; currency: string }>
+    >('/rider/payouts', { amount });
+    return res.data.data;
+  }
+
   async getRiderProfile() {
-    const res = await this.http.get<ApiResponse<any>>('/rider/profile');
+    const res = await this.http.get<ApiResponse<RiderProfileDto>>('/rider/profile');
     return res.data.data;
   }
 
@@ -237,12 +367,18 @@ export class HarakaApiClient {
   }
 
   async reportPublicIssue(token: string, category: string, description: string) {
-    const res = await this.http.post<ApiResponse<{ received: boolean }>>(`/public/tracking/${token}/report`, { category, description });
+    const res = await this.http.post<ApiResponse<{ received: boolean }>>(
+      `/public/tracking/${token}/report`,
+      { category, description },
+    );
     return res.data.data;
   }
 
   async submitPublicRating(token: string, score: number, comment?: string) {
-    const res = await this.http.post<ApiResponse<{ received: boolean }>>(`/public/tracking/${token}/rating`, { score, comment });
+    const res = await this.http.post<ApiResponse<{ received: boolean }>>(
+      `/public/tracking/${token}/rating`,
+      { score, comment },
+    );
     return res.data.data;
   }
 
@@ -254,7 +390,7 @@ export class HarakaApiClient {
   }
 
   async adminGetFleet() {
-    const res = await this.http.get<ApiResponse<any[]>>('/admin/fleet');
+    const res = await this.http.get<ApiResponse<AdminFleetRiderDto[]>>('/admin/fleet');
     return res.data.data;
   }
 
@@ -268,12 +404,16 @@ export class HarakaApiClient {
   }
 
   async adminAssignJob(jobId: string, riderId: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/admin/jobs/${jobId}/assign`, { riderId });
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/admin/jobs/${jobId}/assign`, {
+      riderId,
+    });
     return res.data.data;
   }
 
   async adminCancelJob(jobId: string, reason: string) {
-    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/admin/jobs/${jobId}/cancel`, { reason });
+    const res = await this.http.post<ApiResponse<JobDetailDto>>(`/admin/jobs/${jobId}/cancel`, {
+      reason,
+    });
     return res.data.data;
   }
 
@@ -291,8 +431,22 @@ export class HarakaApiClient {
     return res.data.data;
   }
 
+  async rejectRider(riderId: string, reason: string) {
+    const res = await this.http.post<ApiResponse<any>>(`/admin/riders/${riderId}/reject`, {
+      reason,
+    });
+    return res.data.data;
+  }
+
+  async reactivateRider(riderId: string) {
+    const res = await this.http.post<ApiResponse<any>>(`/admin/riders/${riderId}/reactivate`);
+    return res.data.data;
+  }
+
   async suspendRider(riderId: string, reason: string) {
-    const res = await this.http.post<ApiResponse<any>>(`/admin/riders/${riderId}/suspend`, { reason });
+    const res = await this.http.post<ApiResponse<any>>(`/admin/riders/${riderId}/suspend`, {
+      reason,
+    });
     return res.data.data;
   }
 
@@ -304,7 +458,22 @@ export class HarakaApiClient {
   }
 
   async adminUpdatePricingRule(ruleId: string, payload: Record<string, unknown>) {
-    const res = await this.http.patch<ApiResponse<PricingRuleDto>>(`/admin/pricing/rules/${ruleId}`, payload);
+    const res = await this.http.patch<ApiResponse<PricingRuleDto>>(
+      `/admin/pricing/rules/${ruleId}`,
+      payload,
+    );
+    return res.data.data;
+  }
+
+  async adminCreatePricingRule(payload: {
+    zoneId: string;
+    vehicleType: 'BODA' | 'TUKTUK' | 'MINIVAN';
+    baseFare: number;
+    perKmRate: number;
+    minimumFare: number;
+    riderShareBps: number;
+  }) {
+    const res = await this.http.post<ApiResponse<PricingRuleDto>>('/admin/pricing/rules', payload);
     return res.data.data;
   }
 
@@ -349,7 +518,9 @@ export class HarakaApiClient {
   }
 
   async adminResolveDispute(id: string, resolutionNote: string) {
-    const res = await this.http.post<ApiResponse<any>>(`/admin/disputes/${id}/resolve`, { resolutionNote });
+    const res = await this.http.post<ApiResponse<any>>(`/admin/disputes/${id}/resolve`, {
+      resolutionNote,
+    });
     return res.data.data;
   }
 

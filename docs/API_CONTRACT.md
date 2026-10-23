@@ -104,4 +104,4 @@
 - `POST /api/v1/admin/riders/:id/suspend`
 - `GET /api/v1/admin/pricing` — Manage pricing rules & service zones
 - `GET /api/v1/admin/ledger` — Inspect double-entry balance sheets & audit logs
-- `GET /api/v1/health` & `GET /health/live` — Health monitoring probes
+- `GET /api/v1/health/live`, `GET /api/v1/health/ready`, and `GET /api/v1/health` — Health monitoring probes
